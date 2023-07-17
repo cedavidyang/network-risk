@@ -132,7 +132,7 @@ def identify_damage_condition(n_br, damage_netdb=None, pf_array=None,
         missing_condition_key = all_condition_key
     else:
         existing_key = [key for key, value in damage_netdb.items()
-                            if value != missing_value]
+                            if (value != missing_value) and (key not in ('max', 'min'))]
         missing_condition_key = list(set(all_condition_key)-set(existing_key))
 
 
@@ -217,47 +217,47 @@ def expected_maxflow_drop(
     else:
         pf4db = None
         sorting_indx = np.arange(len(pf_array))
-    
-    damage_netdb = generate_damage_netdb(
-        G, pf_array=pf4db, damage_netdb=damage_netdb, od_pairs=od_pairs,
-        remain_capacity=remain_capacity, include_scenario=include_scenario,
-        capacity=capacity, n_jobs=n_jobs, missing_value=missing_value,
-        timeout=timeout)
 
     n_br = len(pf_array)
     if include_scenario == 'all':
         total_scenario = 2**n_br - 1
     elif isinstance(include_scenario, (int, np.int64)):
         total_scenario = include_scenario
+    elif include_scenario == 'custom':
+        assert damage_netdb is not None, "must provide damage_netdb when include_scenario='custom'"
+        total_scenario = len(list(damage_netdb.values()))
     else:
-        sys.exit("include_scenario must be 'all' or an integer")
+        sys.exit("include_scenario must be 'all' or an integer or 'custom'")
+    
+    if (include_scenario == 'all') or isinstance(include_scenario, (int, np.int64)):
+        condition_keys = identify_damage_condition(
+            n_br, damage_netdb=None, pf_array=pf_array,
+            include_scenario=include_scenario, missing_value=missing_value)
+        damage_netdb = generate_damage_netdb(
+            G, pf_array=pf4db, damage_netdb=damage_netdb, od_pairs=od_pairs,
+            remain_capacity=remain_capacity, include_scenario=include_scenario,
+            capacity=capacity, n_jobs=n_jobs, missing_value=missing_value,
+            timeout=timeout)
+    else:
+        condition_keys = [k for k in damage_netdb.keys() if k not in ('max', 'min')]
 
-    nsc = 0
     scenario_probs = np.zeros(total_scenario)
     scenario_util = np.zeros(total_scenario)
-    for failed in range(1, n_br):
-        for indx in itertools.combinations(sorting_indx, failed):
-            damage_condition = np.zeros(n_br, dtype=bool)
-            damage_condition[(indx,)] = True
+    for nsc, key in enumerate(condition_keys):
+        damage_condition = np.zeros(n_br, dtype=bool)
+        damage_condition[(key,)] = True
 
-            # if failure probability is low the following is okay, but we need to use the accurate
-            # scenario_probs when failure probabilities are high or all scenarios are considered
-            # scenario_probs[nsc] = np.product(pf_array[(indx,)])
-            survive_indx = tuple(np.setdiff1d(sorting_indx, indx))
-            scenario_probs[nsc] = np.exp(np.log(pf_array[(indx,)]).sum() +
-                                         np.log(1-pf_array[(survive_indx,)]).sum())
-            if indx in damage_netdb.keys():
-                flow = damage_netdb[indx]
-            else:
-                flow = 0.5*(damage_netdb['max']+damage_netdb['min'])
-            scenario_util[nsc] = flow_conseq(flow, min_flow=0, max_flow=max_flow)
-
-            nsc += 1
-            if nsc >= total_scenario:
-                break
-
-        if nsc >= total_scenario:
-            break
+        # if failure probability is low the following is okay, but we need to use the accurate
+        # scenario_probs when failure probabilities are high or all scenarios are considered
+        # scenario_probs[nsc] = np.product(pf_array[(indx,)])
+        survive_indx = tuple(np.setdiff1d(sorting_indx, key))
+        scenario_probs[nsc] = np.exp(np.log(pf_array[(key,)]).sum() +
+                                     np.log(1-pf_array[(survive_indx,)]).sum())
+        if key in damage_netdb.keys():
+            flow = damage_netdb[key]
+        else:
+            flow = 0.5*(damage_netdb['max']+damage_netdb['min'])
+        scenario_util[nsc] = flow_conseq(flow, min_flow=0, max_flow=max_flow)
 
     if total_scenario == 2**n_br - 1:
         mean_net_drop = scenario_probs @ scenario_util
@@ -277,11 +277,12 @@ def expected_maxflow_drop(
 
 
 def compute_net_risk(
-        G, od_pairs, pf_array_smps, sort_pf=False, remain_capacity=0,
+        G, od_pairs, pf_array_smps, sort_pf=False, remain_capacity=0, max_flow=None,
         damage_netdb=None, include_scenario: int|str ='all',
         capacity='capacity', n_jobs=1, missing_value=-1, timeout=None):
 
-    max_flow = net_capacity(G, od_pairs=od_pairs, capacity=capacity)
+    if max_flow is None:
+        max_flow = net_capacity(G, od_pairs=od_pairs, capacity=capacity)
 
     nsmp, _ = pf_array_smps.shape
 
@@ -290,7 +291,7 @@ def compute_net_risk(
         for i, pf_array in enumerate(pf_array_smps):
             net_risk, damage_netdb = expected_maxflow_drop(
                 G, od_pairs, pf_array=pf_array, sort_pf=sort_pf,
-                remain_capacity=remain_capacity,max_flow=max_flow,
+                remain_capacity=remain_capacity, max_flow=max_flow,
                 damage_netdb=damage_netdb, include_scenario=include_scenario,
                 capacity=capacity, n_jobs=n_jobs,
                 missing_value=missing_value, timeout=timeout)
@@ -323,7 +324,7 @@ def _damage_netdb_test():
         n_jobs=4, missing_value=-1)
 
 
-if __name__ == '__main__':
+def _risk_compare_test():
     import os
     import pickle
 
@@ -336,13 +337,11 @@ if __name__ == '__main__':
     # bridge_path = pd.read_pickle('./tmp/bridge_path_end.pkl')
 
     # use the following code to generate path_capacity
-    # path_capacity, path_capacity_df = bridge_path_capacity(
-    #     G_comp, bridge_path)
-    path_capacity_df = pd.read_pickle('./tmp/path_capacity_df.pkl') 
-    path_capacity = path_capacity_df.sort_values('bridge_id')['flow'].to_numpy()
-    
-    timeout0, timeout1, n_jobs = 8*60*60, 120, 80
-    nsmp, n_br = 100, len(path_capacity)
+    path_capacity, path_capacity_df = bridge_path_capacity(
+        G_comp, bridge_path)
+
+    timeout0, timeout1, n_jobs = 1*60*60, 60, 80
+    nsmp, n_br = 10, len(path_capacity)
     n_fail = 2
     fail_seed = 1
     remain_capacity = 1/60*20
@@ -364,15 +363,16 @@ if __name__ == '__main__':
     n_fail = np.minimum(n_br, n_fail)
     include_scenario = np.sum([comb(n_br, j) for j in range(1, n_fail+1)])
 
-    
+
     # # explicitly obtain damage_netdb to allow keyboard interrupt
     od_data = np.load('./tmp/bnd_od.npz')
     od_pairs = od_data['bnd_od']
 
-    with open('./tmp/tmp_2023-07-16_21_45/damage_netdb.pkl', 'rb') as f_read:
+    # explicitly obtain damage_netdb to allow keyboard interrupt
+    with open('./tmp/tmp_2023-07-17_10_36/damage_netdb.pkl', 'rb') as f_read:
         damage_netdb = pickle.load(f_read)
-    min_scenario = include_scenario
     # min_scenario = n_br
+    min_scenario = include_scenario
     damage_netdb = generate_damage_netdb(
         G_comp, pf_array=None, damage_netdb=damage_netdb, od_pairs=od_pairs,
         remain_capacity=remain_capacity, include_scenario=min_scenario,
@@ -395,6 +395,81 @@ if __name__ == '__main__':
 
     with open(os.path.join(data_dir, 'damage_netdb.pkl'), 'wb') as f:
         pickle.dump(damage_netdb, f)
+
+    path_capacity_df.to_pickle(
+        os.path.join(data_dir, 'path_capacity_df.pkl'))
+
+    np.savez(os.path.join(data_dir, 'MC_smps.npz'),
+             include_scenario=include_scenario,
+             pf_array_smps=pf_array_smps,
+             add_risk_smps=add_risk_smps,
+             net_risk_smps=net_risk_smps)
+
+
+if __name__ == '__main__':
+    import os
+    import pickle
+
+    from datetime import datetime
+    from scipy import stats
+    from math import comb
+
+    # ===============================================================
+    # Use existing damage_netdb
+    # ===============================================================
+    
+    G_comp = nx.read_graphml('./tmp/or_comp_graph.graphml', node_type=int)
+    bridge_path = pd.read_pickle('./tmp/bridge_path_bnd.pkl')
+    # bridge_path = pd.read_pickle('./tmp/bridge_path_end.pkl')
+
+    # use the following code to generate path_capacity
+    # path_capacity, path_capacity_df = bridge_path_capacity(
+    #     G_comp, bridge_path)
+    path_capacity_df = pd.read_pickle('./tmp/path_capacity_df.pkl') 
+    path_capacity = path_capacity_df.sort_values('bridge_id')['flow'].to_numpy()
+
+    nsmp, n_br = 100, len(path_capacity)
+    n_fail = 2
+    fail_seed = 1
+    remain_capacity = 1/60*20
+    min_beta, max_beta = 0, 3
+
+    beta_array_smps = stats.uniform.rvs(loc=min_beta, scale=max_beta-min_beta,
+                                        size=(nsmp, n_br), random_state=fail_seed)
+    pf_array_smps = stats.norm.cdf(-beta_array_smps)
+
+    # ===============================================================
+    # Additive risk
+    # ===============================================================
+    cost_array = path_capacity
+    add_risk_smps = compute_add_risk(pf_array_smps, cost_array)
+
+    # ===============================================================
+    # Net risk
+    # ===============================================================
+
+    od_data = np.load('./tmp/bnd_od.npz')
+    od_pairs = od_data['bnd_od']
+    max_flow = net_capacity(G_comp, od_pairs=od_pairs, capacity='capacity')
+
+    # explicitly obtain damage_netdb to allow keyboard interrupt
+    with open('./tmp/tmp_2023-07-17_10_36/damage_netdb.pkl', 'rb') as f_read:
+        damage_netdb = pickle.load(f_read)
+
+    include_scenario = 'custom'
+    net_risk_smps, damage_netdb = compute_net_risk(
+        G_comp, od_pairs, pf_array_smps, sort_pf=True,
+        remain_capacity=remain_capacity, max_flow=max_flow,
+        damage_netdb=damage_netdb, include_scenario=include_scenario,
+        capacity='capacity', n_jobs=1, missing_value=-1,
+        timeout=None)
+    
+    # ===============================================================
+    # Save results
+    # ===============================================================
+    time_stamp = datetime.now().strftime('%Y-%m-%d_%H_%M')
+    data_dir = os.path.join('./tmp', f'tmp_{time_stamp}')
+    os.makedirs(data_dir, exist_ok=False)
 
     path_capacity_df.to_pickle(
         os.path.join(data_dir, 'path_capacity_df.pkl'))

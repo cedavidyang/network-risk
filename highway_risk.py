@@ -213,51 +213,43 @@ def expected_maxflow_drop(
     if sort_pf:
         assert pf_array is not None, "must provide pf_array if sort_pf=True"
         pf4db = pf_array
-        sorting_indx = pf_array.argsort()[::-1]
     else:
         pf4db = None
-        sorting_indx = np.arange(len(pf_array))
 
     n_br = len(pf_array)
-    if include_scenario == 'all':
-        total_scenario = 2**n_br - 1
-    elif isinstance(include_scenario, (int, np.int64)):
-        total_scenario = include_scenario
-    elif include_scenario == 'custom':
-        assert damage_netdb is not None, "must provide damage_netdb when include_scenario='custom'"
-        total_scenario = len(list(damage_netdb.values()))
-    else:
-        sys.exit("include_scenario must be 'all' or an integer or 'custom'")
-    
     if (include_scenario == 'all') or isinstance(include_scenario, (int, np.int64)):
         condition_keys = identify_damage_condition(
-            n_br, damage_netdb=None, pf_array=pf_array,
+            n_br, damage_netdb=None, pf_array=pf4db,
             include_scenario=include_scenario, missing_value=missing_value)
         damage_netdb = generate_damage_netdb(
             G, pf_array=pf4db, damage_netdb=damage_netdb, od_pairs=od_pairs,
             remain_capacity=remain_capacity, include_scenario=include_scenario,
             capacity=capacity, n_jobs=n_jobs, missing_value=missing_value,
             timeout=timeout)
-    else:
+    elif include_scenario == 'custom':
+        assert damage_netdb is not None, "must provide damage_netdb when include_scenario='custom'"
         condition_keys = [k for k in damage_netdb.keys() if k not in ('max', 'min')]
-
+    else:
+        sys.exit("include_scenario must be 'all' or an integer or 'custom'")
+    
+    total_scenario = len(condition_keys)
     scenario_probs = np.zeros(total_scenario)
     scenario_util = np.zeros(total_scenario)
     for nsc, key in enumerate(condition_keys):
         damage_condition = np.zeros(n_br, dtype=bool)
         damage_condition[(key,)] = True
+        prob = np.exp(np.log(pf_array[damage_condition]).sum() +
+                      np.log(1-pf_array[np.logical_not(damage_condition)]).sum())
 
-        # if failure probability is low the following is okay, but we need to use the accurate
-        # scenario_probs when failure probabilities are high or all scenarios are considered
-        # scenario_probs[nsc] = np.product(pf_array[(indx,)])
-        survive_indx = tuple(np.setdiff1d(sorting_indx, key))
-        scenario_probs[nsc] = np.exp(np.log(pf_array[(key,)]).sum() +
-                                     np.log(1-pf_array[(survive_indx,)]).sum())
         if key in damage_netdb.keys():
             flow = damage_netdb[key]
         else:
             flow = 0.5*(damage_netdb['max']+damage_netdb['min'])
-        scenario_util[nsc] = flow_conseq(flow, min_flow=0, max_flow=max_flow)
+
+        scenario_probs[nsc] = prob
+        scenario_util[nsc] = flow
+
+    scenario_util = flow_conseq(scenario_util, min_flow=0, max_flow=max_flow)
 
     if total_scenario == 2**n_br - 1:
         mean_net_drop = scenario_probs @ scenario_util
@@ -432,7 +424,7 @@ if __name__ == '__main__':
     n_fail = 2
     fail_seed = 1
     remain_capacity = 1/60*20
-    min_beta, max_beta = 0, 3
+    min_beta, max_beta = 3, 4
 
     beta_array_smps = stats.uniform.rvs(loc=min_beta, scale=max_beta-min_beta,
                                         size=(nsmp, n_br), random_state=fail_seed)
@@ -453,7 +445,7 @@ if __name__ == '__main__':
     max_flow = net_capacity(G_comp, od_pairs=od_pairs, capacity='capacity')
 
     # explicitly obtain damage_netdb to allow keyboard interrupt
-    with open('./tmp/tmp_2023-07-17_10_36/damage_netdb.pkl', 'rb') as f_read:
+    with open('./tmp/tmp_2023-07-17_13_41/damage_netdb.pkl', 'rb') as f_read:
         damage_netdb = pickle.load(f_read)
 
     include_scenario = 'custom'

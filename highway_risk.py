@@ -332,7 +332,7 @@ def _risk_compare_test():
     path_capacity, path_capacity_df = bridge_path_capacity(
         G_comp, bridge_path)
 
-    timeout0, timeout1, n_jobs = 1*60*60, 60, 80
+    timeout0, timeout1, n_jobs = 4*60*60, 60, 80
     nsmp, n_br = 10, len(path_capacity)
     n_fail = 2
     fail_seed = 1
@@ -361,7 +361,7 @@ def _risk_compare_test():
     od_pairs = od_data['bnd_od']
 
     # explicitly obtain damage_netdb to allow keyboard interrupt
-    with open('./tmp/tmp_2023-07-17_10_36/damage_netdb.pkl', 'rb') as f_read:
+    with open('./tmp/tmp_2023-07-18_14_20/damage_netdb.pkl', 'rb') as f_read:
         damage_netdb = pickle.load(f_read)
     # min_scenario = n_br
     min_scenario = include_scenario
@@ -447,7 +447,7 @@ if __name__ == '__main__':
     # explicitly obtain damage_netdb to allow keyboard interrupt
     with open('./tmp/tmp_2023-07-17_13_41/damage_netdb.pkl', 'rb') as f_read:
         damage_netdb = pickle.load(f_read)
-
+    
     include_scenario = 'custom'
     net_risk_smps, damage_netdb = compute_net_risk(
         G_comp, od_pairs, pf_array_smps, sort_pf=True,
@@ -467,7 +467,14 @@ if __name__ == '__main__':
         os.path.join(data_dir, 'path_capacity_df.pkl'))
 
     np.savez(os.path.join(data_dir, 'MC_smps.npz'),
+             max_flow=max_flow,
              include_scenario=include_scenario,
              pf_array_smps=pf_array_smps,
              add_risk_smps=add_risk_smps,
              net_risk_smps=net_risk_smps)
+
+    # ===============================================================
+    # try comparing bridge consequence from damage_netdb
+    # ===============================================================
+    bridge_cost = (max_flow-np.array([damage_netdb[(i,)] for i in range(n_br)]))/max_flow
+    add_risk_smps2 = compute_add_risk(pf_array_smps, bridge_cost)

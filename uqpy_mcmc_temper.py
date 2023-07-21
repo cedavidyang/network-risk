@@ -1,8 +1,5 @@
 # %%
 import numpy as np
-from scipy import stats
-stats.multivariate_normal
-
 from UQpy.distributions import Normal
 
 damage_db: dict[tuple[int, ...], float] = dict()
@@ -32,10 +29,10 @@ def scenario_logp(condition_var, beta_array, from_condition=False):
     return logp_sum
 
 
-def scenario_cost(damage_condition, cost_array, epsilon=1e-6):
+def scenario_cost(damage_condition, cost_array, epsilon=1e-6, damage_db=None):
 
-    # TODO: potential parallelization can happen here
-    global damage_db
+    if damage_db is None:
+        damage_db = dict()
 
     n_smps = damage_condition.shape[0]
     cost = np.zeros(n_smps)
@@ -51,16 +48,18 @@ def scenario_cost(damage_condition, cost_array, epsilon=1e-6):
     return cost
 
 
-def scenario_logC(condition_var, beta_array, cost_array, from_condition=False):
+def scenario_logC(condition_var, beta_array, cost_array, from_condition=False, damage_db=None):
 
     if from_condition:
         damage_condition = condition_var.astype(bool)
     else:
         damage_condition = get_damage_state(condition_var, beta_array=beta_array)
     
-    cost = scenario_cost(damage_condition, cost_array)
+    cost = scenario_cost(damage_condition, cost_array, damage_db=damage_db)
     
-    return np.log(cost)
+    logC = np.log(cost)
+
+    return logC
 
 
 def logpC_target(x, beta_array, cost_array, from_condition=False):
@@ -76,12 +75,15 @@ def logpC_target(x, beta_array, cost_array, from_condition=False):
 
 if __name__ == '__main__':
     import numpy as np
-    from UQpy.sampling import MetropolisHastings, SequentialTemperingMCMC
+    import multiprocess as mp
+    from UQpy.sampling import MetropolisHastings
     from UQpy.distributions import JointIndependent, Normal, Uniform, MultivariateNormal
     from itertools import repeat
 
+    from parallel_tempMCMC import SequentialTemperingMCMCpar
+
     name = 'temper'
-    n_br, min_beta, max_beta, n_smp = 1000, 0, 3, 1000000
+    n_br, min_beta, max_beta, n_smp = 5, 0, 3, 1000
     beta_array = Uniform(loc=min_beta, scale=max_beta-min_beta,).rvs(
         nsamples=n_br, random_state=1)
     beta_array = beta_array.flatten()
@@ -94,9 +96,10 @@ if __name__ == '__main__':
     all_seed = np.vstack(list(repeat([seed0, seed1], _N_CHAINS//2)))
 
     cov = 1.0
-    # proposal = JointIndependent(marginals=[Uniform()]*n_br)
     proposal = MultivariateNormal(mean=[0.0]*n_br, cov=cov)
+    damage_db = dict()
 
+    n_jobs = 4
     # start = time.time()
     if name == 'MH':
         sampler = MetropolisHastings(
@@ -109,16 +112,36 @@ if __name__ == '__main__':
     elif name == 'temper':
         resampler = MetropolisHastings(dimension=n_br, n_chains=_N_CHAINS)
         prior = MultivariateNormal(mean=[0.0]*n_br, cov=1.0)
-        sampler = SequentialTemperingMCMC(
-            # log_pdf_intermediate=lambda x,b: b*logpC_target(x, beta_array, cost_array, from_condition=False),
-            log_pdf_intermediate=lambda x,b: b*scenario_logC(x, beta_array, cost_array, from_condition=False),
-            distribution_reference=prior,
-            save_intermediate_samples=True,
-            percentage_resampling=10,
-            sampler=resampler,
-            nsamples=n_smp
-        )
-        sampler.proposal_given_flag = False
+        if n_jobs == 1:
+            damage_db = dict()
+            def _log_pdf_intermediate(x, b, damage_db=damage_db):
+                logC, = scenario_logC(x, beta_array, cost_array, from_condition=False, damage_db=damage_db),
+                return  b*logC
+            sampler = SequentialTemperingMCMCpar(
+                log_pdf_intermediate=_log_pdf_intermediate,
+                distribution_reference=prior,
+                save_intermediate_samples=True,
+                percentage_resampling=10,
+                sampler=resampler,
+                nsamples=n_smp, n_jobs=n_jobs
+            )
+            sampler.proposal_given_flag = False
+        else:
+            with mp.Manager() as manager:
+                mp_dict = manager.dict()
+                def _log_pdf_intermediate(x, b, damage_db=mp_dict):
+                    logC, = scenario_logC(x, beta_array, cost_array, from_condition=False, damage_db=damage_db),
+                    return  b*logC
+                sampler = SequentialTemperingMCMCpar(
+                    log_pdf_intermediate=_log_pdf_intermediate,
+                    distribution_reference=prior,
+                    save_intermediate_samples=True,
+                    percentage_resampling=10,
+                    sampler=resampler,
+                    nsamples=n_smp, n_jobs=n_jobs
+                )
+                sampler.proposal_given_flag = False
+                damage_db.update(mp_dict)
     # end = time.time()
     # print(f'Sampling time: {end-start}')
     

@@ -193,7 +193,8 @@ if __name__ == '__main__':
                     nsamples=n_smp, n_jobs=n_jobs,
                 )
             except KeyboardInterrupt:
-                damage_db.update(mp_dict)
+                pass
+            damage_db.update(mp_dict)
     
     samples = sampler.samples
     damage_condition = get_damage_state(samples, beta_array).astype(int)

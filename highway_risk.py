@@ -93,7 +93,7 @@ def damaged_net_capacity(G, od_pairs, damage_condition, b_key='bridge_id',
     return total_flow
 
 
-def flow_conseq(flow, min_flow=0, max_flow=1):
+def flow_conseq(flow, min_flow=0., max_flow=1.):
     util = (max_flow-flow)/(max_flow-min_flow)
     return util
 
@@ -140,7 +140,7 @@ def identify_damage_condition(n_br, damage_netdb=None, pf_array=None,
 
 
 def generate_damage_netdb(
-        G, od_pairs, pf_array=None, remain_capacity=0, damage_netdb=None, 
+        G, od_pairs, pf_array=None, remain_capacity=0., damage_netdb=None, 
         include_scenario: int|str ='all', capacity='capacity',
         missing_value=-1, n_jobs=1, timeout=None) -> dict[tuple[int, ...]|str, float]:
     
@@ -359,6 +359,7 @@ def _risk_compare_test():
     # # explicitly obtain damage_netdb to allow keyboard interrupt
     od_data = np.load('./tmp/bnd_od.npz')
     od_pairs = od_data['bnd_od']
+    max_flow = net_capacity(G_comp, od_pairs=od_pairs, capacity='capacity')
 
     # explicitly obtain damage_netdb to allow keyboard interrupt
     with open('./tmp/tmp_2023-07-18_14_20/damage_netdb.pkl', 'rb') as f_read:
@@ -373,7 +374,7 @@ def _risk_compare_test():
 
     net_risk_smps, damage_netdb = compute_net_risk(
         G_comp, od_pairs, pf_array_smps, sort_pf=True,
-        remain_capacity=remain_capacity,
+        remain_capacity=remain_capacity, max_flow=max_flow,
         damage_netdb=damage_netdb, include_scenario=include_scenario,
         capacity='capacity', n_jobs=n_jobs, missing_value=-1,
         timeout=timeout1)
@@ -392,6 +393,7 @@ def _risk_compare_test():
         os.path.join(data_dir, 'path_capacity_df.pkl'))
 
     np.savez(os.path.join(data_dir, 'MC_smps.npz'),
+             max_flow=max_flow,
              include_scenario=include_scenario,
              pf_array_smps=pf_array_smps,
              add_risk_smps=add_risk_smps,

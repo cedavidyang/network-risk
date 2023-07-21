@@ -107,34 +107,49 @@ if __name__ == '__main__':
     from parallel_tempMCMC import SequentialTemperingMCMCpar
     from highway_risk import bridge_path_capacity, net_capacity
 
-    _BURN_LENGTH, _JUMP, _N_CHAINS = 10000, 100, 10
-    n_jobs = 8
     remain_capacity = 1/60*20
-    min_beta, max_beta, n_smp = 0, 3, 10000
-    n_br = 5
-    max_flow = 100.0    # assumed max_flow so all tested bridges will have a non-zeros cost
+    min_beta, max_beta = 0, 3
     cov = 1.0
 
-    # test with the first 5 bridges
-    G_comp = nx.read_graphml('./tmp/or_comp_graph.graphml', node_type=int)
+    mode = 'run'   # or 'test' to consider only 5 bridges
 
-    for u, v, b in G_comp.edges.data('bridge_id'):
-        if b > n_br:
-            G_comp[u][v]['bridge_id'] = 0
-    bridge_list = [b for _, _, b in G_comp.edges.data('bridge_id') if b>0]
-    assert len(bridge_list) == max(bridge_list), "maximum bridge must equal to num. of bridges"
+    G_comp = nx.read_graphml('./tmp/or_comp_graph.graphml', node_type=int)
     od_data = np.load('./tmp/bnd_od.npz')
     od_pairs = od_data['bnd_od']
+
+    if mode == 'test':
+        n_jobs = 8
+        n_chains, n_smp = 10, 1000
+
+        n_br = 5
+        max_flow = 100.0    # assumed max_flow so all tested bridges will have a non-zeros cost
+
+        # test with the first 5 bridges
+        for u, v, b in G_comp.edges.data('bridge_id'):
+            if b > n_br:
+                G_comp[u][v]['bridge_id'] = 0
+        bridge_list = [b for _, _, b in G_comp.edges.data('bridge_id') if b>0]
+
+    elif mode == 'run':
+        n_jobs = 80
+        n_chains, n_smp = 100, 10000
+
+        bridge_list = [b for _, _, b in G_comp.edges.data('bridge_id') if b>0]
+        n_br = len(bridge_list)
+        max_flow = np.load('./tmp/tmp_2023-07-20_05_47/MC_smps.npz')['max_flow'][()]
+    
+    assert len(bridge_list) == max(bridge_list), "maximum bridge must equal to num. of bridges"
+
     with open('./tmp/tmp_2023-07-20_05_47/damage_netdb.pkl', 'rb') as f_read:
         damage_netdb = pickle.load(f_read)
-    damage_db = dict()
-    # for n in range(1, n_br+1):
-    #     for key in itertools.combinations(range(1, n_br+1), n):
-    #         if key in damage_netdb.keys():
-    #             damage_db[key] = damage_netdb[key]
-    for n in range(1, n_br+1):
-        if (n,) in damage_netdb.keys():
-            damage_db[(n,)] = damage_netdb[(n,)]
+    
+    if mode == 'test':
+        damage_db = dict()
+        for n in range(1, n_br+1):
+            if (n,) in damage_netdb.keys():
+                damage_db[(n,)] = damage_netdb[(n,)]
+    elif mode == 'run':
+        damage_db = damage_netdb.copy()
 
 
     beta_array = Uniform(loc=min_beta, scale=max_beta-min_beta,).rvs(
@@ -157,9 +172,9 @@ if __name__ == '__main__':
         ):
         
         logC, = scenario_logC(
-            x, beta_array=beta_array, from_condition=from_condition, G=G_comp,
+            x, beta_array=beta_array, from_condition=from_condition, G=G,
             od_pairs=od_pairs, remain_capacity=remain_capacity,
-            capacity='capacity', max_flow= max_flow,
+            capacity=capacity, max_flow= max_flow,
             damage_db=damage_db, epsilon=epsilon,
         )
 
@@ -167,7 +182,7 @@ if __name__ == '__main__':
 
         return res
 
-    resampler = MetropolisHastings(dimension=n_br, n_chains=_N_CHAINS)
+    resampler = MetropolisHastings(dimension=n_br, n_chains=n_chains)
     prior = MultivariateNormal(mean=[0.0]*n_br, cov=cov)
     if n_jobs == 1:
         use_log_pdf = lambda x,b: _log_pdf_intermediate(x,b, damage_db=damage_db)

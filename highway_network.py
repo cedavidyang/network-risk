@@ -432,6 +432,35 @@ def generate_od_pairs(G, end_nodes=None, length='length',
     return unique_pairs, shortest_path_log
 
 
+def bridge_path_capacity(G, bridge_path: pd.DataFrame, capacity='capacity'):
+
+    bridge_path['flow'] = -1
+    bridge_path['bridge_id'] = -1
+    path_capacity = bridge_path.copy()
+
+    for index, df_row in path_capacity.iterrows():
+        od = df_row.od
+        bridge = df_row.bridge
+        df_row['bridge_id'] = G.get_edge_data(*bridge)['bridge_id']
+
+        flow = bridge_path[bridge_path.bridge==bridge].iloc[0].at['flow']
+        if od[0] == od[1]:
+            # special case when a bridge is not on any od path. Set flow=0 so
+            # failure of that bridge will have no consequences
+            df_row['flow'] = 0
+        elif flow == -1:
+            flow, _ = nx.maximum_flow(G, od[0], od[1], capacity=capacity)
+            bridge_path.loc[bridge_path.od==od, 'flow'] = flow
+            df_row['flow'] = flow
+        else:
+            df_row['flow'] = flow
+        
+        # update path_capacity
+        path_capacity.loc[index] = df_row
+
+    return path_capacity
+
+# %%
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
@@ -464,36 +493,5 @@ if __name__ == '__main__':
     np.savez('./tmp/end_od.npz', end_od=end_od)
     shortest_path_log2.to_pickle('./tmp/bridge_path_end.pkl')
 
-
-# %%
-
-def bridge_path_capacity(G, bridge_path: pd.DataFrame, capacity='capacity'):
-
-    bridge_path['flow'] = -1
-    bridge_path['bridge_id'] = -1
-    path_capacity = bridge_path.copy()
-
-    for index, df_row in path_capacity.iterrows():
-        od = df_row.od
-        bridge = df_row.bridge
-        df_row['bridge_id'] = G.get_edge_data(*bridge)['bridge_id']
-
-        flow = bridge_path[bridge_path.bridge==bridge].iloc[0].at['flow']
-        if od[0] == od[1]:
-            # special case when a bridge is not on any od path. Set flow=0 so
-            # failure of that bridge will have no consequences
-            df_row['flow'] = 0
-        elif flow == -1:
-            flow, _ = nx.maximum_flow(G, od[0], od[1], capacity=capacity)
-            bridge_path.loc[bridge_path.od==od, 'flow'] = flow
-            df_row['flow'] = flow
-        else:
-            df_row['flow'] = flow
-        
-        # update path_capacity
-        path_capacity.loc[index] = df_row
-
-    return path_capacity
-
-path_capacity = bridge_path_capacity(G_comp, shortest_path_log)
+    path_capacity = bridge_path_capacity(G_comp, shortest_path_log)
 

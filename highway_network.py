@@ -331,7 +331,7 @@ def generate_highway_graph(
         ox.save_graph_geopackage(G_plot, filepath="./tmp_G_nopar.gpkg")
     
 
-    # STEP 2: consolidate nodes to simply grpah. Remove parallel links
+    # STEP 2: consolidate nodes to simply graph. Remove parallel links
     # afterwards (same as STEP 1 operations). Note the
     # consolidate_intersections() only works with MultiDiGraph or MultiGraph
     G_nopar = nx.MultiDiGraph(G_nopar)

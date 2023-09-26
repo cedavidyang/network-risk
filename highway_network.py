@@ -9,11 +9,12 @@ import itertools
 
 from osmnx import utils_graph
 from shapely.ops import linemerge
-from shapely.geometry import LineString, MultiLineString
-from shapely.geometry import Point
+from shapely.geometry import MultiLineString
+
+_MIN_LANE, _MAX_SPEED = 2, 60.0
 
 
-def _append_compute_attributes(G, min_lane=2, max_speed=60, inplace=True):
+def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, inplace=True):
     """Add numertical attributes needed for graph flow computation and further graph simplification
 
     Args:
@@ -122,7 +123,6 @@ def _simplify_graph_d2(G, track_merged=False):
     attrs_to_min = {'lane'}
     attrs_to_max = {'speed'}
     attrs_to_unique = {'bridge_id', 'capacity_param'}
-    # attrs_to_merge = {'osmid', 'lanes'}
 
     for comp in nx.connected_components(G_sub):
         if len(comp) > 2:
@@ -160,14 +160,6 @@ def _simplify_graph_d2(G, track_merged=False):
                     path_attributes[attr] = np.min(path_attributes[attr])
                 elif attr in attrs_to_unique:
                     path_attributes[attr] = np.unique(path_attributes[attr], axis=0)[0]
-                # do not do the following processing since we have list of lists that does not work with set
-                # elif len(set(path_attributes[attr])) == 1:
-                #     # if there's only 1 unique value in this attribute list,
-                #     # consolidate it to the single value (the zero-th):
-                #     path_attributes[attr] = path_attributes[attr][0]
-                # else:
-                #     # otherwise, if there are multiple values, keep one of each
-                #     path_attributes[attr] = list(set(path_attributes[attr]))
 
             # update link capacity that may no longer be valid
             path_attributes['capacity'] = compute_capacity(
@@ -177,9 +169,6 @@ def _simplify_graph_d2(G, track_merged=False):
             ) 
 
             # construct the new consolidated edge's geometry for this path
-            # path_attributes["geometry"] = LineString(
-            #     [Point((G.nodes[node]["x"], G.nodes[node]["y"])) for node in path]
-            # )
             multi_line = MultiLineString(path_attributes["geometry"])
             path_attributes["geometry"] = linemerge(multi_line)
 
@@ -193,12 +182,12 @@ def _simplify_graph_d2(G, track_merged=False):
                 {"origin": path[0], "destination": path[-1], "attr_dict": path_attributes}
             )
 
-    # for each edge to add in the list we assembled, create a new edge between
+    # STEP 3: For each edge to add in the list we assembled, create a new edge between
     # the origin and destination
     for edge in all_edges_to_add:
         G.add_edge(edge["origin"], edge["destination"], **edge["attr_dict"])
 
-    # finally remove all the interstitial nodes between the new edges
+    # STEP 4: Finally remove all the interstitial nodes between the new edges
     G.remove_nodes_from(set(all_nodes_to_remove))
 
     # mark graph as having been simplified
@@ -207,7 +196,7 @@ def _simplify_graph_d2(G, track_merged=False):
     return G
 
 
-def compute_capacity(lane, speed, min_lane=2, max_speed=60):
+def compute_capacity(lane, speed, min_lane=_MIN_LANE, max_speed=_MAX_SPEED):
     """compute link capacity based on lane and speed
 
     Args:
@@ -236,7 +225,7 @@ def generate_compute_graph(G):
         max_speed (int, optional): max speed on a highway link. Defaults to 60.
 
     Returns:
-        H (MultiDiGraph): Graph with added attributes
+        G_comp (Graph): Graph with added attributes
     """
     
     G_comp = nx.Graph()
@@ -385,7 +374,8 @@ def generate_od_pairs(G, end_nodes=None, length='length',
     Args:
         G (Graph, DiGraph, MultiGraph, MultiDiGraph): highway network
         end_nodes (list): a list of end nodes to be considered as OD
-        length (str, optional): _description_. Defaults to 'length'.
+        length (str, optional): key name to compute path length.
+        Defaults to 'length'.
         min_distance (float, optional): minimum distance to be
         considered as an OD pair. This is to avoid super short OD paths.
         Defaults to 0.
@@ -433,26 +423,38 @@ def generate_od_pairs(G, end_nodes=None, length='length',
 
 
 def bridge_path_capacity(G, bridge_path: pd.DataFrame, capacity='capacity'):
+    """For each bridge, get the max flow along the shortest path using that bridge.
 
-    bridge_path['flow'] = -1
-    bridge_path['bridge_id'] = -1
+    Args:
+        G (Graph): computational graph representing the highway
+        bridge_path (pd.DataFrame): pandas DataFrame containing the bridge link,
+        the shortest path using that link, and the OD of that path. This is
+        obtained from `generate_OD_pairs`.
+        capacity (str, optional): key name used to compute maximum flow.
+        Defaults to 'capacity'.
+
+    Returns:
+        pd.DataFrame: similar to bridge_path but include bridge id and the maximum
+        flow on the shortest path usnig the bridge
+    """
+
     path_capacity = bridge_path.copy()
+    path_capacity['flow'] = -1
+    path_capacity['bridge_id'] = -1
 
     for index, df_row in path_capacity.iterrows():
         od = df_row.od
         bridge = df_row.bridge
         df_row['bridge_id'] = G.get_edge_data(*bridge)['bridge_id']
 
-        flow = bridge_path[bridge_path.bridge==bridge].iloc[0].at['flow']
+        flow = path_capacity[path_capacity.bridge==bridge].iloc[0].at['flow']
         if od[0] == od[1]:
             # special case when a bridge is not on any od path. Set flow=0 so
             # failure of that bridge will have no consequences
             df_row['flow'] = 0
         elif flow == -1:
             flow, _ = nx.maximum_flow(G, od[0], od[1], capacity=capacity)
-            bridge_path.loc[bridge_path.od==od, 'flow'] = flow
-            df_row['flow'] = flow
-        else:
+            # bridge_path.loc[bridge_path.od==od, 'flow'] = flow
             df_row['flow'] = flow
         
         # update path_capacity
@@ -468,8 +470,8 @@ if __name__ == '__main__':
     # place = {"state": "Oregon", "country": "USA"}
     # filter = '["highway"~"motorway|trunk|primary"]'
     # G_raw = ox.graph_from_place(place, truncate_by_edge=True, custom_filter=filter)
-    # ox.save_graph_geopackage(G_raw, filepath="./tmp/or_hwy2prim_raw.gpkg")
-    G_raw = ox.load_graphml(filepath="./tmp/or_hwy2prim_raw.graphml")
+    # ox.save_graph_geopackage(G_raw, filepath="./assets/or_hwy2prim_raw.gpkg")
+    G_raw = ox.load_graphml(filepath="./assets/or_hwy2prim_raw.graphml")
 
     fig, ax = ox.plot_graph(G_raw)
     fig.savefig('./tmp/or_hwy2prim_consol100.png', dpi=600)
@@ -478,20 +480,21 @@ if __name__ == '__main__':
         G_raw, crs='epsg:3857', consol_tolerance=100,
         min_lane=2, max_speed=60)
 
-    nx.write_graphml(G_comp, './tmp/or_comp_graph.graphml')
+    nx.write_graphml(G_comp, './assets/or_comp_graph.graphml')
 
     bnd_nodes, end_nodes = identify_end_nodes(
         G_gis, state_polygon='./gis/OR-boundary/OR-boundary.shp')
 
     bnd_od, shortest_path_log = generate_od_pairs(
         G_comp, end_nodes=bnd_nodes, min_distance=50e3)
-    np.savez('./tmp/bnd_od.npz', bnd_od=bnd_od)
+    np.savez('./assets/bnd_od.npz', bnd_od=bnd_od)
     shortest_path_log.to_pickle('./tmp/bridge_path_bnd.pkl')
 
+    # alternatively, all end nodes can be selected as OD
     end_od, shortest_path_log2 = generate_od_pairs(
         G_comp, end_nodes=end_nodes, min_distance=50e3)
     np.savez('./tmp/end_od.npz', end_od=end_od)
     shortest_path_log2.to_pickle('./tmp/bridge_path_end.pkl')
 
     path_capacity = bridge_path_capacity(G_comp, shortest_path_log)
-
+# %%

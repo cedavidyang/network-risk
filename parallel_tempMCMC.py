@@ -3,10 +3,11 @@ import copy
 import multiprocess as mp
 import numpy as np
 from beartype import beartype
-from typing import Optional
+from typing import Optional, Union, Dict
 
 from UQpy.distributions import Distribution
 from UQpy.utilities.ValidationTypes import PositiveInteger, RandomStateType
+from UQpy.utilities.Utilities import process_random_state
 from UQpy.sampling.mcmc.baseclass.MCMC import MCMC
 from UQpy.sampling.mcmc.tempering_mcmc.baseclass.TemperingMCMC import TemperingMCMC
 from UQpy.distributions.collection.MultivariateNormal import MultivariateNormal
@@ -19,11 +20,14 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
     def __init__(self, pdf_intermediate=None, log_pdf_intermediate=None, args_pdf_intermediate=(), seed=None,
                  distribution_reference: Distribution = None,
                  sampler: MCMC = None,
+                 sampler_proposal_kwarg: Union[type(None), Dict] = None,
                  nsamples: PositiveInteger = None,
                  n_jobs: PositiveInteger = 1,
                  recalculate_weights: bool = False,
                  save_intermediate_samples=False,
                  percentage_resampling: int = 100,
+                 cov_scale: float = 0.2,
+                 weight_cov_threshold: float = 1.0,
                  random_state: RandomStateType = None,
                  resampling_burn_length: int = 0,
                  resampling_proposal: Distribution = None,
@@ -63,6 +67,7 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
         self.logger = logging.getLogger(__name__)
 
         self.sampler = sampler
+        self.sampler_proposal_kwarg = {'mean': None, 'cov':None} if sampler_proposal_kwarg is None else sampler_proposal_kwarg
         # Initialize inputs
         self.save_intermediate_samples = save_intermediate_samples
         self.recalculate_weights = recalculate_weights
@@ -88,15 +93,9 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
         self.tempering_parameters = None
         self.evidence = None
         self.evidence_CoV = None
-        self.n_jobs = n_jobs
-
-        # Call the run function
-        if nsamples is not None and (n_jobs==1):
-            self.run(nsamples=nsamples)
-        elif nsamples is not None and (n_jobs>1):
-            self.parallel_run(nsamples=nsamples, n_jobs=n_jobs, log_pdf_intermediate=log_pdf_intermediate)
-        else:
-            raise ValueError('UQpy: a value for "nsamples" must be specified ')
+        self.raw_random_state = random_state if isinstance(random_state, int) else None
+        self.cov_scale = cov_scale
+        self.weight_cov_threshold = weight_cov_threshold
 
     @beartype
     def run(self, nsamples: PositiveInteger = None):
@@ -136,7 +135,7 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
             self.intermediate_samples += [points.copy()]
 
         # Calculate covariance matrix for the default proposal
-        cov_scale = 0.2
+        cov_scale = self.cov_scale
         # Looping over all adaptively decided tempering levels
         while current_tempering_parameter < 1:
 
@@ -145,8 +144,11 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
 
             # Adaptively set the tempering exponent for the current level
             previous_tempering_parameter = current_tempering_parameter
-            current_tempering_parameter = self._find_temper_param(previous_tempering_parameter, points,
-                                                                  self.evaluate_log_intermediate, nsamples)
+            current_tempering_parameter = self._find_temper_param(
+                previous_tempering_parameter, points,
+                self.evaluate_log_intermediate, nsamples,
+                cov_threshold=self.weight_cov_threshold
+            )
             # d_exp = temper_param - temper_param_prev
             self.tempering_parameters = np.append(self.tempering_parameters, current_tempering_parameter)
 
@@ -192,7 +194,7 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
 
                 # Defining the default proposal
                 if self.proposal_given_flag is False:
-                    self.proposal = MultivariateNormal(lead, cov=sigma_matrix)
+                    self.proposal = MultivariateNormal(mean=np.zeros_like(lead), cov=sigma_matrix)
 
                 # Single MH-MCMC step
                 x = MetropolisHastings(dimension=self.__dimension, log_pdf_target=mcmc_log_pdf_target, seed=list(lead),
@@ -245,7 +247,7 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
         return self.evidence
 
     @staticmethod
-    def _find_temper_param(temper_param_prev, samples, q_func, n, iter_lim=1000, iter_thresh=0.00001):
+    def _find_temper_param(temper_param_prev, samples, q_func, n, iter_lim=1000, iter_thresh=0.00001, cov_threshold=1.0):
         """
         Find the tempering parameter for the next intermediate target using bisection search between 1.0 and the
         previous tempering parameter (taken to be 0.0 for the first level).
@@ -283,7 +285,7 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
                                       - q_func(samples[i2, :].reshape((1, -1)), temper_param_prev))
             sigma_1 = np.std(q_scaled)
             mu_1 = np.mean(q_scaled)
-            if sigma_1 < mu_1:
+            if sigma_1 < (cov_threshold * mu_1):
                 flag = 1
                 temper_param_trial = 1
                 continue
@@ -292,9 +294,9 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
                                       - q_func(samples[i3, :].reshape((1, -1)), temper_param_prev))
             sigma = np.std(q_scaled)
             mu = np.mean(q_scaled)
-            if sigma < (0.9 * mu):
+            if sigma < (0.9 * cov_threshold * mu):
                 bot = temper_param_trial
-            elif sigma > (1.1 * mu):
+            elif sigma > (1.1 * cov_threshold * mu):
                 top = temper_param_trial
             else:
                 flag = 1
@@ -368,7 +370,8 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
         return mcmc_seed
 
     @beartype
-    def parallel_run(self, nsamples: PositiveInteger = None, n_jobs: PositiveInteger = 1, log_pdf_intermediate=None):
+    def parallel_run(self, nsamples: PositiveInteger = None, n_jobs: PositiveInteger = 1,
+                     log_pdf_intermediate=None, prior_log_pdf=None):
         """
         Run the MCMC algorithm.
 
@@ -405,7 +408,7 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
             self.intermediate_samples += [points.copy()]
 
         # Calculate covariance matrix for the default proposal
-        cov_scale = 0.2
+        cov_scale = self.cov_scale
         # Looping over all adaptively decided tempering levels
         while current_tempering_parameter < 1:
 
@@ -413,22 +416,29 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
             points_copy = np.copy(points)
 
             # Adaptively set the tempering exponent for the current level
+            def task_func(point):
+                lpdf = log_pdf_intermediate(point.reshape((1,-1)), 1.0)[0]
+                return lpdf
+            with mp.Pool(processes=n_jobs) as pool:
+                lpdf_res = pool.map(task_func, points)
+            lpdf_array = np.array(lpdf_res)
+            tmp_intermediate = lambda x,b: b*lpdf_array[np.all(points==x, axis=1)][0]
+
             previous_tempering_parameter = current_tempering_parameter
             current_tempering_parameter = self._find_temper_param(previous_tempering_parameter, points,
-                                                                  self.evaluate_log_intermediate, nsamples)
+                                                                  tmp_intermediate, nsamples,
+                                                                  cov_threshold=self.weight_cov_threshold)
             # d_exp = temper_param - temper_param_prev
             self.tempering_parameters = np.append(self.tempering_parameters, current_tempering_parameter)
 
             self.logger.info('beta selected')
 
-            # TODO: Calculate the plausibility weights (parallel implementation)
-            def task_func(point):
-                weight_i = np.exp(log_pdf_intermediate(point.reshape((-1,1)), current_tempering_parameter) - 
-                                  log_pdf_intermediate(point.reshape((-1,1)), previous_tempering_parameter))
-                return weight_i[0]
-            with mp.Pool(processes=n_jobs) as pool:
-                res = pool.map(task_func, points)
-                weights = np.array([w for w in res])
+            # Calculate the plausibility weights
+            for i in range(nsamples):
+                weights[i] = np.exp(tmp_intermediate(points[i, :].reshape((1, -1)),
+                                                         current_tempering_parameter)
+                                    - tmp_intermediate(points[i, :].reshape((1, -1)),
+                                                           previous_tempering_parameter))
 
             # Calculate normalizing constant for the plausibility weights (sum of the weights)
             w_sum = np.sum(weights)
@@ -437,24 +447,28 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
             # Normalize plausibility weight probabilities
             weight_probabilities = (weights / w_sum)
 
-            w_theta_sum = np.zeros(self.__dimension)
-            for i in range(nsamples):
-                for j in range(self.__dimension):
-                    w_theta_sum[j] += weights[i] * points[i, j]
-            sigma_matrix = np.zeros((self.__dimension, self.__dimension))
-            for i in range(nsamples):
-                points_deviation = np.zeros((self.__dimension, 1))
-                for j in range(self.__dimension):
-                    points_deviation[j, 0] = points[i, j] - (w_theta_sum[j] / w_sum)
-                sigma_matrix += (weights[i] / w_sum) * np.dot(points_deviation,
-                                                              points_deviation.T)  # Normalized by w_sum as per Betz et al
-            sigma_matrix = cov_scale ** 2 * sigma_matrix
+            if self.proposal_given_flag is False:
+                w_theta_sum = np.zeros(self.__dimension)
+                for i in range(nsamples):
+                    for j in range(self.__dimension):
+                        w_theta_sum[j] += weights[i] * points[i, j]
+                sigma_matrix = np.zeros((self.__dimension, self.__dimension))
+                for i in range(nsamples):
+                    points_deviation = np.zeros((self.__dimension, 1))
+                    for j in range(self.__dimension):
+                        points_deviation[j, 0] = points[i, j] - (w_theta_sum[j] / w_sum)
+                    sigma_matrix += (weights[i] / w_sum) * np.dot(points_deviation,
+                                                                  points_deviation.T)  # Normalized by w_sum as per Betz et al
+                sigma_matrix = cov_scale ** 2 * sigma_matrix
+            else:
+                sigma_matrix = np.eye(self.__dimension)
 
-            mcmc_log_pdf_target = self._target_generator(self.evaluate_log_intermediate,
-                                                         self.evaluate_log_reference, current_tempering_parameter)
+            mcmc_log_pdf_target = lambda x: (prior_log_pdf(x) + log_pdf_intermediate(x, current_tempering_parameter))
 
             self.logger.info('Begin Resampling')
+
             # Resampling and MH-MCMC step
+            initial_random_state = self.raw_random_state
             for i in range(self.n_resamples):
 
                 # Resampling from previous tempering level
@@ -463,7 +477,7 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
 
                 # Defining the default proposal
                 if self.proposal_given_flag is False:
-                    self.proposal = MultivariateNormal(lead, cov=sigma_matrix)
+                    self.proposal = MultivariateNormal(mean=np.zeros_like(lead), cov=sigma_matrix)
 
                 # Single MH-MCMC step
                 x = MetropolisHastings(dimension=self.__dimension, log_pdf_target=mcmc_log_pdf_target, seed=list(lead),
@@ -491,10 +505,30 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
 
             y = copy.deepcopy(self.sampler)
             self.update_target_and_seed(y, mcmc_seed, mcmc_log_pdf_target)
-            y = self.sampler.__copy__(log_pdf_target=mcmc_log_pdf_target, seed=mcmc_seed,
-                                      nsamples_per_chain=self.n_samples_per_chain,
-                                      concatenate_chains=True, random_state=self.random_state)
-            points[self.n_resamples:, :] = y.samples
+
+            nsamples_per_chain=self.n_samples_per_chain
+            initial_random_state = self.raw_random_state
+            kwd = copy.deepcopy(self.sampler_proposal_kwarg)
+            dimension = self.__dimension
+
+            def task_func(random_state, seed):
+                # one can creat a new ABC, but not pass an ABC
+                if initial_random_state is not None:
+                    random_state = process_random_state(random_state+initial_random_state)
+                else:
+                    random_state = process_random_state(initial_random_state)
+                if kwd['mean'] is None:
+                    kwd_mean = [0.0]*dimension
+                mcmc_proposal = MultivariateNormal(mean=kwd_mean, cov=kwd['cov'])
+                x = MetropolisHastings(dimension=dimension, log_pdf_target=mcmc_log_pdf_target,
+                                       seed=list(seed), n_chains=1,
+                                       proposal=mcmc_proposal,
+                                       nsamples_per_chain=nsamples_per_chain, random_state=random_state)
+                return x.samples
+            with mp.Pool(processes=n_jobs) as pool:
+                res = pool.starmap(task_func, enumerate(mcmc_seed))
+            other_samples = np.vstack(res)
+            points[self.n_resamples:, :] = other_samples
 
             if self.save_intermediate_samples is True:
                 self.intermediate_samples += [points.copy()]
@@ -504,48 +538,4 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
         # Setting the calculated values to the attributes
         self.samples = points
         self.evidence = evidence_estimator
-
-    @staticmethod
-    def _near_pd(x, epsilon=1e-6):
-        '''
-        Calculates the nearest postive semi-definite matrix for a correlation/covariance matrix
-
-        Parameters
-        ----------
-        x : array_like
-          Covariance/correlation matrix
-        epsilon : float
-          Eigenvalue limit (usually set to zero to ensure positive definiteness)
-
-        Returns
-        -------
-        near_cov : array_like
-          closest positive definite covariance/correlation matrix
-
-        Notes
-        -----
-        Document source
-        http://www.quarchome.org/correlationmatrix.pdf
-
-        '''
-
-        if min(np.linalg.eigvals(x)) > epsilon:
-            return x
-
-        # Removing scaling factor of covariance matrix
-        n = x.shape[0]
-        var_list = np.array([np.sqrt(x[i,i]) for i in range(n)])
-        y = np.array([[x[i, j]/(var_list[i]*var_list[j]) for i in range(n)] for j in range(n)])
-
-        # getting the nearest correlation matrix
-        eigval, eigvec = np.linalg.eig(y)
-        val = np.matrix(np.maximum(eigval, epsilon))
-        vec = np.matrix(eigvec)
-        T = 1/(np.multiply(vec, vec) * val.T)
-        T = np.matrix(np.sqrt(np.diag(np.array(T).reshape((n)) )))
-        B = T * vec * np.diag(np.array(np.sqrt(val)).reshape((n)))
-        near_corr = B*B.T    
-
-        # returning the scaling factors
-        near_cov = np.array([[near_corr[i, j]*(var_list[i]*var_list[j]) for i in range(n)] for j in range(n)])
-        return near_cov
+        self.sigma_matrix = sigma_matrix

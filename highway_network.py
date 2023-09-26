@@ -462,39 +462,6 @@ def bridge_path_capacity(G, bridge_path: pd.DataFrame, capacity='capacity'):
 
     return path_capacity
 
-# %%
+
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-
-    # download/load and generate raw osmnx Graph
-    # place = {"state": "Oregon", "country": "USA"}
-    # filter = '["highway"~"motorway|trunk|primary"]'
-    # G_raw = ox.graph_from_place(place, truncate_by_edge=True, custom_filter=filter)
-    # ox.save_graph_geopackage(G_raw, filepath="./assets/or_hwy2prim_raw.gpkg")
-    G_raw = ox.load_graphml(filepath="./assets/or_hwy2prim_raw.graphml")
-
-    fig, ax = ox.plot_graph(G_raw)
-    fig.savefig('./tmp/or_hwy2prim_consol100.png', dpi=600)
-
-    G_comp, G_gis = generate_highway_graph(
-        G_raw, crs='epsg:3857', consol_tolerance=100,
-        min_lane=2, max_speed=60)
-
-    nx.write_graphml(G_comp, './assets/or_comp_graph.graphml')
-
-    bnd_nodes, end_nodes = identify_end_nodes(
-        G_gis, state_polygon='./gis/OR-boundary/OR-boundary.shp')
-
-    bnd_od, shortest_path_log = generate_od_pairs(
-        G_comp, end_nodes=bnd_nodes, min_distance=50e3)
-    np.savez('./assets/bnd_od.npz', bnd_od=bnd_od)
-    shortest_path_log.to_pickle('./tmp/bridge_path_bnd.pkl')
-
-    # alternatively, all end nodes can be selected as OD
-    end_od, shortest_path_log2 = generate_od_pairs(
-        G_comp, end_nodes=end_nodes, min_distance=50e3)
-    np.savez('./tmp/end_od.npz', end_od=end_od)
-    shortest_path_log2.to_pickle('./tmp/bridge_path_end.pkl')
-
-    path_capacity = bridge_path_capacity(G_comp, shortest_path_log)
-# %%
+    pass

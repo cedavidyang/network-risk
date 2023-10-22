@@ -14,11 +14,12 @@ from shapely.geometry import MultiLineString
 _MIN_LANE, _MAX_SPEED = 2, 60.0
 
 
-def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, inplace=True):
+def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, 
+                               weight = 'length', inplace=True):
     """Add numertical attributes needed for graph flow computation and further graph simplification
 
     Args:
-        G (Graph): original graph after preliminary simplification and consolidation
+        G (Graph, MultiDiGraph): original graph after preliminary simplification and consolidation
         min_lane (int, optional): minimum number of lanes for a highway link in one direction. Defaults to 2.
         max_speed (int, optional): max speed on a highway link. Defaults to 60.
         inplace (bool, optional): whether to add attributes in place. Defaults to True
@@ -27,14 +28,15 @@ def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, inpl
         H (MultiDiGraph): Graph with added attributes
     """
     
-    if isinstance(G, (nx.Graph, nx.DiGraph)):
+    if isinstance(G, (nx.MultiGraph, nx.MultiDiGraph)):
+        H = ox.get_digraph(G, weight=weight)
+        if inplace:
+            inplace = False
+            print("Warning: inplace has been set to False")
+    elif isinstance(G, (nx.Graph, nx.DiGraph)):
         H = G if inplace else G.copy()
-    elif G.graph['no_parallel']:
-        H = ox.get_undirected(G)
-        inplace = False
-        print("Warning: inplace has been set to False")
     else:
-        sys.exit("G must be Graph or DiGraph or can be converted to such")
+        sys.exit("G must be nx objects")
 
     bridge_indx = 0
     for u, v, data in H.edges(data=True):
@@ -57,7 +59,7 @@ def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, inpl
         else:
             speed = max_speed
 
-        # capacity = lane/max_speed*speed
+        # Use the following assumption: capacity = lane/max_speed*speed
         capacity = compute_capacity(lane, speed,
                                     min_lane=min_lane, max_speed=max_speed)
 
@@ -95,12 +97,12 @@ def _simplify_graph_d2(G, track_merged=False):
 
     # STEP 1: find subgraph components including only d2 nodes
 
-    if isinstance(G, nx.DiGraph):
-        G = nx.to_undirected(G)
-    elif isinstance(G, nx.Graph):
-        G = G.copy()
-    else:
-        sys.exit("G must be DiGraph or Graph")
+    # if isinstance(G, nx.DiGraph):
+    #     G = nx.to_undirected(G)
+    # elif isinstance(G, nx.Graph):
+    #     G = G.copy()
+    # else:
+    #     sys.exit("G must be DiGraph or Graph")
     
     sub_nodes = []
     for u, d in G.degree():
@@ -227,10 +229,13 @@ def generate_compute_graph(G):
     Returns:
         G_comp (Graph): Graph with added attributes
     """
-    
-    G_comp = nx.Graph()
+    if G.is_directed():
+        G_comp = nx.DiGraph()
+    else:
+        G_comp = nx.Graph()
     
     G_comp.add_nodes_from(G.nodes)
+    print("Number of nodes: ", len(G_comp.nodes))
 
     for u, v, data in G.edges(data=True):
         lane = data['lane']
@@ -244,7 +249,7 @@ def generate_compute_graph(G):
     return G_comp
 
 
-def identify_end_nodes(G, state_polygon=None, save_nodes=False):
+def identify_end_nodes(G, state_polygon=None, save_nodes=True):
     """Identify boundary nodes and all end nodes.
 
     Args:
@@ -399,6 +404,10 @@ def generate_od_pairs(G, end_nodes=None, length='length',
     shortest_path_log['od'] = [(0,0)]*len(bridge_edges)
 
     for o,d in all_od_pairs:
+        # check if d is reachable from o
+        if not nx.has_path(G, o, d):
+            continue
+        
         paths = nx.all_shortest_paths(G, o, d, weight=length)
         for path in paths:
             path_graph = nx.path_graph(path)

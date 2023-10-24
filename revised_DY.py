@@ -47,7 +47,7 @@ ox.save_graph_geopackage(nx.MultiDiGraph(G_attr), filepath="./assets_3/or_hw_com
 # identify end nodes and generate od pairs
 bnd_nodes, end_nodes = identify_end_nodes(G_attr, state_polygon= './OR_state_boundary/OR_state.shp')
 bnd_od, shortest_path_log = generate_od_pairs(
-    G_attr, end_nodes=bnd_nodes, min_distance=5e3)
+    G_attr, end_nodes=bnd_nodes, min_distance=5e3, save_geopackage=True)
 
 # save the OD pairs to assets
 np.savez('./assets_3/bnd_od.npz', bnd_od=bnd_od)

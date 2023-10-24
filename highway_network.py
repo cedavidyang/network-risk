@@ -368,7 +368,8 @@ def generate_highway_graph(
 
 
 def generate_od_pairs(G, end_nodes=None, length='length',
-                      min_distance=0., max_distance=1e12, save_geopackage=True):
+                      min_distance=0., max_distance=1e12, save_geopackage=False,
+                      save_to='./assets_3/bnd_od.gpkg'):
     """generate od pairs based on end nodes. They are generated based on:
     * each bridge has at least one OD
     * for one bridge, the OD is selected from all end-node pairs whose 
@@ -386,6 +387,10 @@ def generate_od_pairs(G, end_nodes=None, length='length',
         Defaults to 0.
         max_distance (float, optional): maximum distance for initializeing 
         OD distance associated with each bridge. Defaults to 1e12.
+        save_geopackage (bool, optional): whether to save the OD pairs to
+        a geopackage file. Defaults to False.
+        save_to (str, optional): path to save the OD pairs. Defaults to
+        './assets_3/bnd_od.gpkg'.
 
     Returns:
         unique_pairs (list): list of od pairs
@@ -430,10 +435,10 @@ def generate_od_pairs(G, end_nodes=None, length='length',
 
     if save_geopackage:
         # save the OD pairs to assets
-        list_unique_nodes = np.unique(*unique_pairs)
-        all_graph_nodes = utils_graph.graph_to_gdfs(G, nodes=True, edges=False)
-        unique_nodes_gdf = [i for i in all_graph_nodes if i['osmid'] in list_unique_nodes]
-        unique_nodes_gdf.to_file('./assets_3/od_nodes.gpkg', drive='gpkg')
+        list_unique_nodes = np.unique(unique_pairs)
+        subgraph = G.subgraph(list_unique_nodes)
+        unique_nodes_gdf = utils_graph.graph_to_gdfs(subgraph, nodes=True, edges=False)
+        unique_nodes_gdf.to_file(save_to, driver='GPKG')
 
     return unique_pairs, shortest_path_log
 

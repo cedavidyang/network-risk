@@ -6,6 +6,7 @@ import networkx as nx
 import multiprocess as mp
 from datetime import datetime
 import time
+import osmnx as ox
 
 from typing import Optional
 from type_verifier import Numpy2DBooleanArray, Numpy2DFloatArray, NumpyFloatArray, Numpy2DIntArray
@@ -27,14 +28,29 @@ if __name__ == '__main__':
     random_state = 42
     damage_db = dict()
 
-    mode = 'run'   # or 'test' to consider only 5 bridges
+    mode = 'test'   # 'test' to consider only 5 bridges
 
-    G_comp = nx.read_graphml('./assets/or_comp_graph.graphml', node_type=int)
-    od_data = np.load('./assets/bnd_od.npz')
+    G_ = nx.read_graphml('./assets_3/or_hw_comp.graphml')
+    # change graph attributes type
+    G_comp = nx.DiGraph()
+    for u, v, data in G_.edges(data=True):
+        data['length'] = float(data['length'])
+        data['capacity'] = float(data['capacity'])
+        data['lane'] = int(data['lane'])
+        data['speed'] = float(data['speed'])
+        data['bridge_id'] = int(data['bridge_id'])
+        G_comp.add_edge(u, v, **data)
+    for n, data in G_.nodes(data=True):
+        G_comp.add_node(n, **data)
+    mapping = {n: int(n) for n in G_comp.nodes}
+    G_comp = nx.relabel_nodes(G_comp, mapping)
+
+
+    od_data = np.load('./assets_3/bnd_od.npz')
     od_pairs = od_data['bnd_od']
 
     if mode == 'test':
-        n_jobs = 8
+        n_jobs = 1
         n_chains, resample_pct, n_smp = 10, 10, 100
         n_burn, n_jump = 10, 1
 
@@ -66,7 +82,8 @@ if __name__ == '__main__':
         nsamples=n_br, random_state=1)
     beta_array = beta_array.flatten()
     pf_array = Normal().cdf(-beta_array)
-
+    
+    print(f'setting up complete')
 
     # define intermediate function
     def log_pdf_intermediate(
@@ -115,7 +132,7 @@ if __name__ == '__main__':
             nsamples=n_smp, n_jobs=1,
         )
         time0 = time.time()
-        sampler.run(nsamples=n_smp)
+        sampler.run(nsamples=n_smp) # issue here
         time1 = time.time()
     else:
         with mp.Manager() as manager:
@@ -158,3 +175,4 @@ if __name__ == '__main__':
 
         with open(os.path.join(data_dir, 'damage_netdb.pkl'), 'wb') as f:
             pickle.dump(damage_db, f)
+# %%

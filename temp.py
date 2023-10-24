@@ -39,16 +39,32 @@ G_comp = generate_compute_graph(G_attr)
 # %%
 # save the graph for future use
 G_save = nx.MultiDiGraph(G_comp)
-ox.save_graphml(G_save, filepath="./assets_3/or_hw_comp.graphml")
-ox.save_graph_geopackage(nx.MultiDiGraph(G_attr), filepath="./assets_3/or_hw_comp.gpkg")
-
+ox.save_graphml(G_save, filepath="./assets_2/or_hw_comp.graphml")
+G_save_attr = nx.MultiDiGraph(G_attr)
+ox.save_graph_geopackage(G_save_attr, filepath="./assets_2/or_hw_attr.gpkg", directed=True)
 # %%
 
 # identify end nodes and generate od pairs
 bnd_nodes, end_nodes = identify_end_nodes(G_attr, state_polygon= './OR_state_boundary/OR_state.shp')
 bnd_od, shortest_path_log = generate_od_pairs(
-    G_attr, end_nodes=bnd_nodes, min_distance=5e3)
+    G_attr, end_nodes=bnd_nodes, min_distance = 5e3, max_distance= 1e13)
 
 # save the OD pairs to assets
-np.savez('./assets_3/bnd_od.npz', bnd_od=bnd_od)
+np.savez('./assets_2/bnd_od.npz', bnd_od=bnd_od)
+
+#%%
+max_flow = net_capacity(G_comp, od_pairs=bnd_od, capacity='capacity')
 # %%
+# n = 0
+# for u, v, data in G_comp.edges(data=True):
+#     if data['bridge_id'] != 0:
+#         n += 1
+# print(n)
+# %%
+# G_attr.nodes[85199866]
+# {'y': 5159803.924194695, 'x': -13772330.404158983, 'street_count': 1, 'lon': -123.718949, 'lat': 41.992152}
+# G_attr.nodes[1223727013]
+# {'y': 5720064.94554994, 'x': -13655843.974672744, 'street_count': 1, 'lon': -122.6725336, 'lat': 45.6225337}
+
+# %%
+

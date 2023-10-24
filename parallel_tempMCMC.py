@@ -1,9 +1,10 @@
 import logging
 import copy
-import multiprocess as mp
+import multiprocessing as mp
 import numpy as np
 from beartype import beartype
 from typing import Optional, Union, Dict
+from functools import partial
 
 from UQpy.distributions import Distribution
 from UQpy.utilities.ValidationTypes import PositiveInteger, RandomStateType

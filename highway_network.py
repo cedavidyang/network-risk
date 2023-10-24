@@ -25,7 +25,7 @@ def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED,
         inplace (bool, optional): whether to add attributes in place. Defaults to True
 
     Returns:
-        H (MultiDiGraph): Graph with added attributes
+        H (DiGraph): Graph with added attributes
     """
     
     if isinstance(G, (nx.MultiGraph, nx.MultiDiGraph)):
@@ -368,7 +368,7 @@ def generate_highway_graph(
 
 
 def generate_od_pairs(G, end_nodes=None, length='length',
-                      min_distance=0., max_distance=1e12):
+                      min_distance=0., max_distance=1e12, save_geopackage=True):
     """generate od pairs based on end nodes. They are generated based on:
     * each bridge has at least one OD
     * for one bridge, the OD is selected from all end-node pairs whose 
@@ -427,6 +427,13 @@ def generate_od_pairs(G, end_nodes=None, length='length',
 
     unique_pairs = np.unique(all_pairs, axis=0)
     unique_pairs = unique_pairs[np.all(unique_pairs, axis=1)]
+
+    if save_geopackage:
+        # save the OD pairs to assets
+        list_unique_nodes = np.unique(*unique_pairs)
+        all_graph_nodes = utils_graph.graph_to_gdfs(G, nodes=True, edges=False)
+        unique_nodes_gdf = [i for i in all_graph_nodes if i['osmid'] in list_unique_nodes]
+        unique_nodes_gdf.to_file('./assets_3/od_nodes.gpkg', drive='gpkg')
 
     return unique_pairs, shortest_path_log
 

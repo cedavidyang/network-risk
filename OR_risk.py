@@ -25,21 +25,41 @@ if __name__ == '__main__':
     mcmc_covar = 0.5**2
     cov_threshold = 0.2
     random_state = 42
-    damage_db = dict()
+    warm_start = False
+    if warm_start:
+        with open('./tmp/tmp_2023-10-26_20_18/damage_netdb.pkl', 'rb') as f:
+            damage_db = pickle.load(f)
+    else:
+        damage_db = dict()
 
-    mode = 'run'   # or 'test' to consider only 5 bridges
+    mode = 'run'   # 'test' to consider only 5 bridges
 
-    G_comp = nx.read_graphml('./assets/or_comp_graph.graphml', node_type=int)
-    od_data = np.load('./assets/bnd_od.npz')
+    G_ = nx.read_graphml('./assets_3/or_hw_comp.graphml')
+    # change graph attributes type
+    G_comp = nx.DiGraph()
+    for u, v, data in G_.edges(data=True):
+        data['length'] = float(data['length'])
+        data['capacity'] = float(data['capacity'])
+        data['lane'] = int(data['lane'])
+        data['speed'] = float(data['speed'])
+        data['bridge_id'] = int(data['bridge_id'])
+        G_comp.add_edge(u, v, **data)
+    for n, data in G_.nodes(data=True):
+        G_comp.add_node(n, **data)
+    mapping = {n: int(n) for n in G_comp.nodes}
+    G_comp = nx.relabel_nodes(G_comp, mapping)
+
+
+    od_data = np.load('./assets_3/bnd_od.npz')
     od_pairs = od_data['bnd_od']
 
     if mode == 'test':
-        n_jobs = 8
+        n_jobs = 2
         n_chains, resample_pct, n_smp = 10, 10, 100
         n_burn, n_jump = 10, 1
 
         n_br = 5
-        max_flow = 100.0    # assumed max_flow so all tested bridges will have a non-zeros cost
+        max_flow = 160    # assumed max_flow so all tested bridges will have a non-zeros cost 
 
         # test with the first 5 bridges
         for u, v, b in G_comp.edges.data('bridge_id'):
@@ -56,6 +76,7 @@ if __name__ == '__main__':
         n_br = len(bridge_list)
         max_flow = net_capacity(G_comp, od_pairs=od_pairs, capacity='capacity')
     
+      
     else:
         raise RuntimeError("Unknown mode (must be 'test' or 'run')")
     
@@ -66,7 +87,8 @@ if __name__ == '__main__':
         nsamples=n_br, random_state=1)
     beta_array = beta_array.flatten()
     pf_array = Normal().cdf(-beta_array)
-
+    
+    print(f'setting up complete')
 
     # define intermediate function
     def log_pdf_intermediate(
@@ -158,3 +180,12 @@ if __name__ == '__main__':
 
         with open(os.path.join(data_dir, 'damage_netdb.pkl'), 'wb') as f:
             pickle.dump(damage_db, f)
+        
+        # save samples, damage_condition, unique_condition
+        with open(os.path.join(data_dir, 'samples.pkl'), 'wb') as f:
+            pickle.dump(samples, f)
+        with open(os.path.join(data_dir, 'damage_condition.pkl'), 'wb') as f:
+            pickle.dump(damage_condition, f)
+        with open(os.path.join(data_dir, 'unique_condition.pkl'), 'wb') as f:
+            pickle.dump(unique_condition, f)
+

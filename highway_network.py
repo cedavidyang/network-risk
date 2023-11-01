@@ -14,27 +14,29 @@ from shapely.geometry import MultiLineString
 _MIN_LANE, _MAX_SPEED = 2, 60.0
 
 
-def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, inplace=True):
+def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, 
+                               weight = 'length', inplace=True):
     """Add numertical attributes needed for graph flow computation and further graph simplification
 
     Args:
-        G (Graph): original graph after preliminary simplification and consolidation
+        G (Graph, MultiDiGraph): original graph after preliminary simplification and consolidation
         min_lane (int, optional): minimum number of lanes for a highway link in one direction. Defaults to 2.
         max_speed (int, optional): max speed on a highway link. Defaults to 60.
         inplace (bool, optional): whether to add attributes in place. Defaults to True
 
     Returns:
-        H (MultiDiGraph): Graph with added attributes
+        H (DiGraph): Graph with added attributes
     """
     
-    if isinstance(G, (nx.Graph, nx.DiGraph)):
+    if isinstance(G, (nx.MultiGraph, nx.MultiDiGraph)):
+        H = ox.get_digraph(G, weight=weight)
+        if inplace:
+            inplace = False
+            print("Warning: inplace has been set to False")
+    elif isinstance(G, (nx.Graph, nx.DiGraph)):
         H = G if inplace else G.copy()
-    elif G.graph['no_parallel']:
-        H = ox.get_undirected(G)
-        inplace = False
-        print("Warning: inplace has been set to False")
     else:
-        sys.exit("G must be Graph or DiGraph or can be converted to such")
+        sys.exit("G must be nx objects")
 
     bridge_indx = 0
     for u, v, data in H.edges(data=True):
@@ -57,7 +59,7 @@ def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, inpl
         else:
             speed = max_speed
 
-        # capacity = lane/max_speed*speed
+        # Use the following assumption: capacity = lane/max_speed*speed
         capacity = compute_capacity(lane, speed,
                                     min_lane=min_lane, max_speed=max_speed)
 
@@ -95,12 +97,12 @@ def _simplify_graph_d2(G, track_merged=False):
 
     # STEP 1: find subgraph components including only d2 nodes
 
-    if isinstance(G, nx.DiGraph):
-        G = nx.to_undirected(G)
-    elif isinstance(G, nx.Graph):
-        G = G.copy()
-    else:
-        sys.exit("G must be DiGraph or Graph")
+    # if isinstance(G, nx.DiGraph):
+    #     G = nx.to_undirected(G)
+    # elif isinstance(G, nx.Graph):
+    #     G = G.copy()
+    # else:
+    #     sys.exit("G must be DiGraph or Graph")
     
     sub_nodes = []
     for u, d in G.degree():
@@ -227,10 +229,13 @@ def generate_compute_graph(G):
     Returns:
         G_comp (Graph): Graph with added attributes
     """
-    
-    G_comp = nx.Graph()
+    if G.is_directed():
+        G_comp = nx.DiGraph()
+    else:
+        G_comp = nx.Graph()
     
     G_comp.add_nodes_from(G.nodes)
+    print("Number of nodes: ", len(G_comp.nodes))
 
     for u, v, data in G.edges(data=True):
         lane = data['lane']
@@ -244,7 +249,7 @@ def generate_compute_graph(G):
     return G_comp
 
 
-def identify_end_nodes(G, state_polygon=None, save_nodes=False):
+def identify_end_nodes(G, state_polygon=None, save_nodes=True):
     """Identify boundary nodes and all end nodes.
 
     Args:
@@ -363,7 +368,8 @@ def generate_highway_graph(
 
 
 def generate_od_pairs(G, end_nodes=None, length='length',
-                      min_distance=0., max_distance=1e12):
+                      min_distance=0., max_distance=1e12, save_geopackage=False,
+                      save_to='./assets_3/bnd_od.gpkg'):
     """generate od pairs based on end nodes. They are generated based on:
     * each bridge has at least one OD
     * for one bridge, the OD is selected from all end-node pairs whose 
@@ -381,6 +387,10 @@ def generate_od_pairs(G, end_nodes=None, length='length',
         Defaults to 0.
         max_distance (float, optional): maximum distance for initializeing 
         OD distance associated with each bridge. Defaults to 1e12.
+        save_geopackage (bool, optional): whether to save the OD pairs to
+        a geopackage file. Defaults to False.
+        save_to (str, optional): path to save the OD pairs. Defaults to
+        './assets_3/bnd_od.gpkg'.
 
     Returns:
         unique_pairs (list): list of od pairs
@@ -399,6 +409,10 @@ def generate_od_pairs(G, end_nodes=None, length='length',
     shortest_path_log['od'] = [(0,0)]*len(bridge_edges)
 
     for o,d in all_od_pairs:
+        # check if d is reachable from o
+        if not nx.has_path(G, o, d):
+            continue
+        
         paths = nx.all_shortest_paths(G, o, d, weight=length)
         for path in paths:
             path_graph = nx.path_graph(path)
@@ -418,6 +432,13 @@ def generate_od_pairs(G, end_nodes=None, length='length',
 
     unique_pairs = np.unique(all_pairs, axis=0)
     unique_pairs = unique_pairs[np.all(unique_pairs, axis=1)]
+
+    if save_geopackage:
+        # save the OD pairs to assets
+        list_unique_nodes = np.unique(unique_pairs)
+        subgraph = G.subgraph(list_unique_nodes)
+        unique_nodes_gdf = utils_graph.graph_to_gdfs(subgraph, nodes=True, edges=False)
+        unique_nodes_gdf.to_file(save_to, driver='GPKG')
 
     return unique_pairs, shortest_path_log
 

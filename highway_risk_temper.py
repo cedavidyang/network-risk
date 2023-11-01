@@ -31,7 +31,7 @@ def damaged_net_capacity(G, od_pairs, damage_condition, b_key='bridge_id',
             data[capacity] = np.minimum(remain_capacity, original_capacity)
     total_flow = 0
     for od in od_pairs:
-        flow, flow_dict = nx.maximum_flow(G1, od[0], od[1], capacity=capacity)
+        flow = nx.maximum_flow_value(G1, od[0], od[1], capacity=capacity)
         total_flow += flow
     return total_flow
 

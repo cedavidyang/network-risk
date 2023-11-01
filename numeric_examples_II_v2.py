@@ -190,25 +190,22 @@ def compare_methods(n_br,useful_br, random_state):
         'RB': [RB_risk, RB_time, RB_no_evaluations, RB_no_samples, RB_no_samples_per_stage, RB_no_stages],
         'benchmark': risk0,
         'input' : [n_br, random_state],
-    }
+    }    
     return results
 
-# n_br = 5
-# random_state = 1
-# results = compare_methods(n_br, random_state)
 
-n_brs = [30, 50, 100]
-random_states = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-useful_brs = [3, 5, 10]
+n_brs = [5, 10, 30, 50, 100]
+random_states = [1, 2, 3, 4, 5]
+useful_brs = [1] # doesn't matter for add cost
 
-TM_vs_MC = dict()
+TM_vs_All = dict()
 run = 1
 for n_br in n_brs:
     for random_state in random_states:
         for useful_br in useful_brs:
             results = compare_methods(n_br,useful_br, random_state)
-            TM_vs_MC[run] = results
-            TM_vs_MC[run]['input'] = [n_br, random_state, useful_br]
+            TM_vs_All[run] = results
+            TM_vs_All[run]['input'] = [n_br, random_state, useful_br]
             run += 1
             print('n_br = {}, random_state = {}, n_useful = {}'.format(n_br, random_state, useful_br))
 
@@ -223,68 +220,85 @@ def extract_results(All_results, method, n_br, n_use, idx=0):
 def get_benchmark(All_results, n_br, n_use):
     benchmark = [result['benchmark'] for result in All_results.values() if (result['input'][0] == n_br) and (result['input'][-1] == n_use)]
     return benchmark
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import numpy as np
-
-def boxplots(dictionary, n_br, n_use):
-
-    # Create a figure and axis
-    fig, ax = plt.subplots()
-
-    # Create boxplots for TMCMC and MC columns for 30 br and 3 useful br
-    TMCMC = extract_results(dictionary, 'TMCMC', n_br, n_use)
-    MC = extract_results(dictionary, 'MC', n_br, n_use)
-    # RB = extract_results(dictionary, 'RB', n_br, n_use)
-    # RB_mean, RB_std = np.mean(RB), np.std(RB)
-    TMCMC_mean, MC_mean = np.mean(TMCMC), np.mean(MC)
-    TMCMC_std, MC_std = np.std(TMCMC), np.std(MC)
-    both = pd.DataFrame({'TMCMC': TMCMC, 'MC': MC})
-    precise = get_benchmark(dictionary, n_br, n_use)
-    sns.boxplot(data=both, ax=ax,whis=(0,100))
-    # Add a horizontal line for Precise
-    ax.axhline(y=precise[0], color='red', linestyle='--', label='Precise riks')
-
-    # Add points for each row and label TMCMC and MC
-    sns.stripplot(data=both, color="orange", ax=ax)
-    # Set labels and title for the main plot
-    ax.set_xlabel("Methods")
-    ax.set_ylabel("Risk")
-    ax.set_title("For {} useful and {} total bridges".format(n_use, n_br))
-
-    # # Label mean and std for TMCMC and MC
-    # ax.text(0, 0.5* min(np.min(TMCMC),np.min(MC)), 'Mean = {:.2f}\nStd = {:.2f}'.format(TMCMC_mean, TMCMC_std), ha='center', va='center', size=10)
-    # ax.text(1, 0.5* min(np.min(TMCMC),np.min(MC)), 'Mean = {:.2f}\nStd = {:.2f}'.format(MC_mean, MC_std), ha='center', va='center', size=10,)
-
-    # Show legend for the main plot
-    ax.legend()
-
-
-    # Show the plot
-    plt.savefig('./assets/{}_bridges_{}_useful.png'.format(n_br, n_use))
-    plt.show()
-    print(f'mean TMCMC = {TMCMC_mean}, mean MC = {MC_mean}')
-    print(f'std TMCMC = {TMCMC_std}, std MC = {MC_std}')
-    print(f'benchmark = {precise[0]}')
-
-#%% 
-# load
-import pickle
-with open('TM_vs_MC_with_RB.pickel', 'rb') as f:
-    TM_vs_MC = pickle.load(f)
 #%%
-n_brs = [30, 50, 100]
-useful_brs = [3, 5, 10]
-for n_br in n_brs:
-    for n_use in useful_brs:
-        boxplots(TM_vs_MC, n_br, n_use)
+
+# Will write results to a csv file
+
+methods = ['TMCMC', 'MC', 'RB']
+with open('./TM_vs_All.csv', 'a') as f:
+    f.write('Run, Random state, Dimension, Method, no. of stages, samples per stage, no. of samples, no. of evaluations, Wall-clock time, Result, Benchmark\n')
+    for run in TM_vs_All.keys():
+        for method in methods:
+            f.write('{},{},{},{},{},{},{},{},{},{},{}\n'.format(
+                run, TM_vs_All[run]['input'][1], TM_vs_All[run]['input'][0], method,
+                TM_vs_All[run][method][-1], TM_vs_All[run][method][-2], TM_vs_All[run][method][3],
+                TM_vs_All[run][method][2], TM_vs_All[run][method][1], TM_vs_All[run][method][0],
+                TM_vs_All[run]['benchmark']
+            ))
+
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# import pandas as pd
+# import numpy as np
+
+# def boxplots(dictionary, n_br, n_use):
+
+#     # Create a figure and axis
+#     fig, ax = plt.subplots()
+
+#     # Create boxplots for TMCMC and MC columns for 30 br and 3 useful br
+#     TMCMC = extract_results(dictionary, 'TMCMC', n_br, n_use)
+#     MC = extract_results(dictionary, 'MC', n_br, n_use)
+#     # RB = extract_results(dictionary, 'RB', n_br, n_use)
+#     # RB_mean, RB_std = np.mean(RB), np.std(RB)
+#     TMCMC_mean, MC_mean = np.mean(TMCMC), np.mean(MC)
+#     TMCMC_std, MC_std = np.std(TMCMC), np.std(MC)
+#     both = pd.DataFrame({'TMCMC': TMCMC, 'MC': MC})
+#     precise = get_benchmark(dictionary, n_br, n_use)
+#     sns.boxplot(data=both, ax=ax,whis=(0,100))
+#     # Add a horizontal line for Precise
+#     ax.axhline(y=precise[0], color='red', linestyle='--', label='Precise riks')
+
+#     # Add points for each row and label TMCMC and MC
+#     sns.stripplot(data=both, color="orange", ax=ax)
+#     # Set labels and title for the main plot
+#     ax.set_xlabel("Methods")
+#     ax.set_ylabel("Risk")
+#     ax.set_title("For {} useful and {} total bridges".format(n_use, n_br))
+
+#     # # Label mean and std for TMCMC and MC
+#     # ax.text(0, 0.5* min(np.min(TMCMC),np.min(MC)), 'Mean = {:.2f}\nStd = {:.2f}'.format(TMCMC_mean, TMCMC_std), ha='center', va='center', size=10)
+#     # ax.text(1, 0.5* min(np.min(TMCMC),np.min(MC)), 'Mean = {:.2f}\nStd = {:.2f}'.format(MC_mean, MC_std), ha='center', va='center', size=10,)
+
+#     # Show legend for the main plot
+#     ax.legend()
 
 
-#%%
-# # Save results
+#     # Show the plot
+#     plt.savefig('./assets/{}_bridges_{}_useful.png'.format(n_br, n_use))
+#     plt.show()
+#     print(f'mean TMCMC = {TMCMC_mean}, mean MC = {MC_mean}')
+#     print(f'std TMCMC = {TMCMC_std}, std MC = {MC_std}')
+#     print(f'benchmark = {precise[0]}')
+
+# #%% 
+# # load
 # import pickle
-# with open('TM_vs_MC_with_RB.pickel', 'wb') as f:
-#     pickle.dump(TM_vs_MC, f)
+# with open('TM_vs_MC_with_RB.pickel', 'rb') as f:
+#     TM_vs_All = pickle.load(f)
+# #%%
+# n_brs = [30, 50, 100]
+# useful_brs = [3, 5, 10]
+# for n_br in n_brs:
+#     for n_use in useful_brs:
+#         boxplots(TM_vs_All, n_br, n_use)
 
+
+# #%%
+# # # Save results
+# # import pickle
+# # with open('TM_vs_MC_with_RB.pickel', 'wb') as f:
+# #     pickle.dump(TM_vs_All, f)
+
+
+# %%

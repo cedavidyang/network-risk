@@ -55,10 +55,11 @@ fig.savefig('./figures/temp_vs_MC.png', dpi=600)
 import numpy as np
 import pandas as pd
 
-folder = 'tmp_2023-08-15_07_05'
+folder = 'tmp_2023-10-27_23_11'
 
-damage_data = np.load(f'./assets/{folder}/damage_condition.npz')
-unique_condition, counts = damage_data['unique_condition'], damage_data['counts']
+damage_condition = np.load(f'./assets/{folder}/damage_condition.pkl', allow_pickle=True)
+
+unique_condition, counts = np.unique(damage_condition, axis=0, return_counts=True)
 
 top = 3
 sort_indx = np.argsort(counts)
@@ -71,3 +72,82 @@ bridge_df = pd.DataFrame({'Rank': top_rank, 'Bridge': top_bridge})
 bridge_df.to_csv(f'./assets/{folder}/top{top}_bridges.csv')
 
 # %%
+# Function to calculate to extract results
+def extract_results(All_results, method, n_br, n_use, idx=0):
+    value = [result[method][idx] for result in All_results.values() if (result['input'][0] == n_br) and (result['input'][-1] == n_use)]
+    return value
+
+# Function to calculate the benchmark
+def get_benchmark(All_results, n_br, n_use):
+    benchmark = [result['benchmark'] for result in All_results.values() if (result['input'][0] == n_br) and (result['input'][-1] == n_use)]
+    return benchmark
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import numpy as np
+
+def boxplots(dictionary, n_br, n_use):
+
+    # Create a figure and axis
+    fig, ax = plt.subplots(1,1,figsize=(4,3), tight_layout=True)
+
+    # Create boxplots for TMCMC and MC columns for 30 br and 3 useful br
+    TMCMC = extract_results(dictionary, 'TMCMC', n_br, n_use)
+    MC = extract_results(dictionary, 'MC', n_br, n_use)
+    # RB = extract_results(dictionary, 'RB', n_br, n_use)
+    # RB_mean, RB_std = np.mean(RB), np.std(RB)
+    TMCMC_mean, MC_mean = np.mean(TMCMC), np.mean(MC)
+    TMCMC_std, MC_std = np.std(TMCMC), np.std(MC)
+    TMCMC_min, TMCMC_max = np.min(TMCMC), np.max(TMCMC)
+    MC_min, MC_max = np.min(MC), np.max(MC)
+    both = pd.DataFrame({'TMCMC': TMCMC, 'MC': MC})
+    precise = get_benchmark(dictionary, n_br, n_use)
+    f1 = sns.boxplot(data=both, ax=ax,whis=(0,100), meanline=True, showmeans=True, width=0.4)
+    
+
+    # Add a horizontal line for Precise
+    ax.axhline(y=precise[0], linestyle='-.', color='tab:red')
+
+    # Add points for each row and label TMCMC and MC
+    # sns.stripplot(data=both, color="orange", ax=ax)
+    sns.swarmplot(data=both, palette=['gray','gray'], ax=ax, marker='o', size=4)
+    
+    # Set labels and title for the main plot
+    ax.set_xlabel("Method",fontsize=8)
+    ax.set_ylabel("Risk",fontsize=8)
+    ax.tick_params(axis='both', labelsize=8)
+    #ax.set_title("For {} useful and {} total bridges".format(n_use, n_br))
+
+    # Show the plot
+    plt.savefig('./assets/plots/{}_bridges_{}_useful.png'.format(n_br, n_use), dpi=600)
+    plt.show()
+    print(f'mean TMCMC = {TMCMC_mean}, mean MC = {MC_mean}')
+    print(f'std TMCMC = {TMCMC_std}, std MC = {MC_std}')
+    print(f'benchmark = {precise[0]}')
+    print(f'min TMCMC = {TMCMC_min}, min MC = {MC_min}')
+    print(f'max TMCMC = {TMCMC_max}, max MC = {MC_max}')
+# %%
+import pickle
+file = './assets/Case_II_results.pickle'
+with open(file, 'rb') as f:
+    TM_vs_MC = pickle.load(f)
+
+n_brs = [30, 50, 100]
+useful_brs = [3, 5, 10]
+for n_br in n_brs:
+    for n_use in useful_brs:
+        boxplots(TM_vs_MC, n_br, n_use)
+
+# %%
+import pickle
+file = './assets/Case_II_results_100.pickle'
+with open(file, 'rb') as f:
+    TM_vs_MC_100 = pickle.load(f)
+
+n_brs = [100]
+useful_brs = [3, 5, 10]
+for n_br in n_brs:
+    for n_use in useful_brs:
+        boxplots(TM_vs_MC_100, n_br, n_use)
+

@@ -32,28 +32,34 @@ for i,n in enumerate(plot_dim):
 # fig.savefig('./figures/temp_vs_all.png', dpi=600)
 
 # %%
-temp_vs_mc = pd.read_excel(
-    './numerical_comparison.xlsx', sheet_name='TMCMC_vs_MC',
-    header=0
-)
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-index_names = temp_vs_mc[temp_vs_mc['Method']=='bound'].index
-temp_vs_mc.drop(index_names, inplace=True)
-
-fig, ax = plt.subplots(1,1, figsize=(4,3), tight_layout=True)
-g1 = sns.boxplot(data=temp_vs_mc, x='Method', y='Result', width=0.4, ax=ax,
-                 meanline=True, showmeans=True, whis=(0,100))
-g2 = sns.swarmplot(data=temp_vs_mc, x='Method', y='Result', color='gray', 
-                   ax=ax, **dict(marker='o'))
-ax.axhline(temp_vs_mc['Benchmark'].iloc[0], linestyle='-.', color='tab:red')
-ax.set_ylabel('Risk', fontsize=9)
-ax.set_xlabel('Method', fontsize=9)
-ax.tick_params(axis='both', labelsize=9)
-fig.savefig('./figures/temp_vs_MC.png', dpi=600)
+for dim in [30, 50, 100]:
+    for useful in [3, 5, 10]:
+        temp_vs_mc = pd.read_excel(
+            './assets/numerical_comparison_AZ.xlsx', sheet_name='TMCMC_vs_MC',
+            header=0 )
+        index_names = temp_vs_mc[temp_vs_mc['Method']=='Bound'].index
+        temp_vs_mc.drop(index_names, inplace=True)
+        temp_vs_mc = temp_vs_mc[(temp_vs_mc['Dimension']==dim) & (temp_vs_mc['Useful dim.']==useful)]
+        fig, ax = plt.subplots(1,1, figsize=(4,3), tight_layout=True)
+        g1 = sns.boxplot(data=temp_vs_mc, x='Method', y='Result', width=0.4, ax=ax,
+                        meanline=True, showmeans=True, whis=(0,100))
+        g2 = sns.swarmplot(data=temp_vs_mc, x='Method', y='Result', color='gray', 
+                        ax=ax, **dict(marker='o'))
+        ax.axhline(temp_vs_mc['Benchmark'].iloc[0], linestyle='-.', color='tab:red')
+        ax.set_ylabel('Risk', fontsize=9)
+        ax.set_xlabel('Method', fontsize=9)
+        ax.tick_params(axis='both', labelsize=9)
+        fig.savefig(f'./assets/plots/{dim}_bridges_{useful}_useful_v2.png', dpi=600)
 
 # %%
 import numpy as np
 import pandas as pd
+import seaborn as sns
+
 
 folder = 'tmp_2023-10-27_23_11'
 
@@ -238,7 +244,7 @@ path = './assets/plots/postions.pkl'
 with open(path, 'wb') as f:
     pickle.dump(pos, f)
 
-nx.draw(G, pos=, node_size=10, width=0.5, node_color='gray', edge_color='gray', 
+nx.draw(G, pos, node_size=10, width=0.5, node_color='gray', edge_color='gray', 
     with_labels=False, arrows=False)
 
 # plt.savefig('./assets/plots/computational_graph.png', dpi=600)

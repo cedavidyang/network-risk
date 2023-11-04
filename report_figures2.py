@@ -68,8 +68,64 @@ top_rank, top_bridge = np.nonzero(top_condition)
 top_rank += 1
 top_bridge += 1
 
-bridge_df = pd.DataFrame({'Rank': top_rank, 'Bridge': top_bridge})
-bridge_df.to_csv(f'./assets/{folder}/top{top}_bridges.csv')
+#bridge_df = pd.DataFrame({'Rank': top_rank, 'Bridge': top_bridge})
+#bridge_df.to_csv(f'./assets/{folder}/top{top}_bridges.csv')
+
+all_bridges = np.arange(1, max(top_bridge)+1)
+all_ranks = np.full(all_bridges.shape, 99)
+
+for bridge in all_bridges:
+    mask = (top_bridge == bridge)
+    if np.any(mask):
+        min_rank = np.min(top_rank[mask])
+        all_ranks[bridge-1] = min_rank
+
+bridge_df = pd.DataFrame({'Bridge': all_bridges, 'Rank_v2': all_ranks})
+bridge_df.to_csv(f'./assets/{folder}/top{top}_bridgesv2.csv')
+
+#%%
+import numpy as np
+import pandas as pd
+from UQpy.distributions import Uniform
+
+# Set the folder name
+folder = 'tmp_2023-11-03_10_52'
+
+# Load the damage condition data
+damage_condition = np.load(f'./assets/{folder}/damage_condition.pkl', allow_pickle=True)
+
+# Identify the top damage conditions and ranks
+unique_condition, counts = np.unique(damage_condition, axis=0, return_counts=True)
+top = 3
+sort_idx = np.argsort(counts)
+top_condition = unique_condition[sort_idx[-top:], :]
+top_rank, top_bridge = np.nonzero(top_condition)
+top_rank += 1
+top_bridge += 1
+
+# Initialize a DataFrame for bridge data
+bridge_data = pd.DataFrame({'Bridge ID': np.arange(1, max(top_bridge) + 1)})
+
+# Initialize columns for ranks and set default rank to 99
+for i in range(top):
+    bridge_data[f'In Rank {i + 1}'] = 0
+bridge_data['Rank'] = 99
+
+# Fill in the rank information
+for i in range(len(top_rank)):
+    bridge_id = top_bridge[i]
+    rank = top_rank[i]
+    bridge_data.at[bridge_id - 1, f'In Rank {rank}'] = 1
+    if rank < bridge_data.at[bridge_id - 1, 'Rank']:
+        bridge_data.at[bridge_id - 1, 'Rank'] = rank
+
+# Generate random beta values using a Uniform distribution
+beta_array = Uniform(loc=0, scale=3,).rvs(nsamples=len(bridge_data), random_state=1)
+bridge_data['Beta Value'] = beta_array
+
+# Save the bridge data to a CSV file
+bridge_data.to_csv(f'./assets/{folder}/bridge_data.csv', index=False)
+
 
 # %%
 # Function to calculate to extract results
@@ -114,9 +170,9 @@ def boxplots(dictionary, n_br, n_use):
     sns.swarmplot(data=both, palette=['gray','gray'], ax=ax, marker='o', size=4)
     
     # Set labels and title for the main plot
-    ax.set_xlabel("Method",fontsize=8)
-    ax.set_ylabel("Risk",fontsize=8)
-    ax.tick_params(axis='both', labelsize=8)
+    ax.set_xlabel("Method",fontsize=9)
+    ax.set_ylabel("Risk",fontsize=9)
+    ax.tick_params(axis='both', labelsize=9)
     #ax.set_title("For {} useful and {} total bridges".format(n_use, n_br))
 
     # Show the plot
@@ -151,3 +207,47 @@ for n_br in n_brs:
     for n_use in useful_brs:
         boxplots(TM_vs_MC_100, n_br, n_use)
 
+
+# %%
+# import the computational graph and plot it using networkx kawanda kawai layout
+import networkx as nx
+import matplotlib.pyplot as plt
+
+G = nx.read_graphml('./assets_3/or_hw_comp.graphml')
+
+# change graph attributes type
+G_comp = nx.DiGraph()
+for u, v, data in G.edges(data=True):
+    data['length'] = float(data['length'])
+    data['capacity'] = float(data['capacity'])
+    data['lane'] = int(data['lane'])
+    data['speed'] = float(data['speed'])
+    data['bridge_id'] = int(data['bridge_id'])
+    G_comp.add_edge(u, v, **data)
+for n, data in G.nodes(data=True):
+    G_comp.add_node(n, **data)
+mapping = {n: int(n) for n in G_comp.nodes}
+G_comp = nx.relabel_nodes(G_comp, mapping)
+
+pos = nx.kamada_kawai_layout(G_comp, weight='length')
+
+# save pos dictionary to a pickle file
+import pickle
+
+path = './assets/plots/postions.pkl'
+with open(path, 'wb') as f:
+    pickle.dump(pos, f)
+
+nx.draw(G, pos=, node_size=10, width=0.5, node_color='gray', edge_color='gray', 
+    with_labels=False, arrows=False)
+
+# plt.savefig('./assets/plots/computational_graph.png', dpi=600)
+# plt.savefig('./assets/plots/computational_graph.pdf', dpi=600)
+
+# %%
+
+with open('positions.npz', 'wb') as f:
+    pickle.dump(pos, f)
+
+
+# %%

@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     mode = 'run'   # 'test' to consider only 5 bridges
 
-    G_ = nx.read_graphml('./assets_3/or_hw_comp.graphml')
+    G_ = nx.read_graphml('./assets/or_hw_comp.graphml')
     # change graph attributes type
     G_comp = nx.DiGraph()
     for u, v, data in G_.edges(data=True):
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     G_comp = nx.relabel_nodes(G_comp, mapping)
 
 
-    od_data = np.load('./assets_3/bnd_od.npz')
+    od_data = np.load('./assets/bnd_od.npz')
     od_pairs = od_data['bnd_od']
 
     if mode == 'test':

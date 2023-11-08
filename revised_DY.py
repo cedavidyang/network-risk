@@ -21,7 +21,7 @@ from highway_risk_temper import net_capacity
 # # save the graph for future use
 # ox.save_graphml(G_raw, filepath="./assets_2/or_hw_raw.graphml")
 
-G_raw = ox.load_graphml(filepath="./assets_2/or_hw_raw.graphml", )
+G_raw = ox.load_graphml(filepath="./assets/or_hw_raw.graphml", )
 
 # fig, ax = ox.plot_graph(G_raw)
 # %%
@@ -40,16 +40,16 @@ G_comp = generate_compute_graph(G_attr)
 # %%
 # save the graph for future use
 G_save = nx.MultiDiGraph(G_comp)
-ox.save_graphml(G_save, filepath="./assets_3/or_hw_comp.graphml")
-ox.save_graph_geopackage(nx.MultiDiGraph(G_attr), filepath="./assets_3/or_hw_comp.gpkg")
+ox.save_graphml(G_save, filepath="./assets/or_hw_comp.graphml")
+ox.save_graph_geopackage(nx.MultiDiGraph(G_attr), filepath="./assets/or_hw_comp.gpkg")
 
 # %%
 
 # identify end nodes and generate od pairs
 bnd_nodes, end_nodes = identify_end_nodes(G_attr, state_polygon= './OR_state_boundary/OR_state.shp')
 bnd_od, shortest_path_log = generate_od_pairs(
-    G_attr, end_nodes=bnd_nodes, min_distance=5e3, save_geopackage=True)
+    G_attr, end_nodes=bnd_nodes, min_distance=50e3, save_geopackage=True)
 
 # save the OD pairs to assets
-np.savez('./assets_3/bnd_od.npz', bnd_od=bnd_od)
+np.savez('./assets/bnd_od.npz', bnd_od=bnd_od)
 # %%

@@ -16,7 +16,7 @@ from highway_risk_temper import net_capacity
 # # download/load and generate raw osmnx Graph
 # place = {"state": "Oregon", "country": "USA"}
 # filter = '["highway"~"motorway|trunk|primary"]'
-# G_raw = ox.graph_from_place(place, truncate_by_edge=True, custom_filter=filter)
+#G_raw = ox.graph_from_place(place, truncate_by_edge=True, custom_filter=filter)
 
 # # save the graph for future use
 # ox.save_graphml(G_raw, filepath="./assets_2/or_hw_raw.graphml")

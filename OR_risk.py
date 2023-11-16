@@ -24,7 +24,7 @@ if __name__ == '__main__':
     min_beta, max_beta = 0, 3
     mcmc_covar = 0.5**2
     cov_threshold = 0.2
-    random_state = 42
+    random_state = 1
     warm_start = False
     if warm_start:
         with open('./tmp/tmp_2023-10-26_20_18/damage_netdb.pkl', 'rb') as f:
@@ -175,7 +175,7 @@ if __name__ == '__main__':
 
     if mode == 'run':
         time_stamp = datetime.now().strftime('%Y-%m-%d_%H_%M')
-        data_dir = os.path.join('./tmp', f'tmp_{time_stamp}')
+        data_dir = os.path.join('./tmp', f'tmp_{time_stamp}_rand_{random_state}')
         os.makedirs(data_dir, exist_ok=False)
 
         with open(os.path.join(data_dir, 'damage_netdb.pkl'), 'wb') as f:
@@ -188,4 +188,6 @@ if __name__ == '__main__':
             pickle.dump(damage_condition, f)
         with open(os.path.join(data_dir, 'unique_condition.pkl'), 'wb') as f:
             pickle.dump(unique_condition, f)
+        with open(os.path.join(data_dir, 'beta_array.pkl'), 'wb') as f:
+            pickle.dump(beta_array, f)
 

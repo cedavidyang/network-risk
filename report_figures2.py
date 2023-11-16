@@ -95,10 +95,11 @@ import pandas as pd
 from UQpy.distributions import Uniform
 
 # Set the folder name
-folder = 'tmp_2023-11-03_10_52'
+folder = 'tmp_2023-11-15_10_16_rand_3'
 
 # Load the damage condition data
 damage_condition = np.load(f'./assets/{folder}/damage_condition.pkl', allow_pickle=True)
+beta_array = np.load(f'./assets/{folder}/beta_array.pkl', allow_pickle=True)
 
 # Identify the top damage conditions and ranks
 unique_condition, counts = np.unique(damage_condition, axis=0, return_counts=True)
@@ -110,7 +111,7 @@ top_rank += 1
 top_bridge += 1
 
 # Initialize a DataFrame for bridge data
-bridge_data = pd.DataFrame({'Bridge ID': np.arange(1, max(top_bridge) + 1)})
+bridge_data = pd.DataFrame({'Bridge ID': np.arange(1, len(beta_array)+1)})
 
 # Initialize columns for ranks and set default rank to 99
 for i in range(top):
@@ -125,12 +126,15 @@ for i in range(len(top_rank)):
     if rank < bridge_data.at[bridge_id - 1, 'Rank']:
         bridge_data.at[bridge_id - 1, 'Rank'] = rank
 
-# Generate random beta values using a Uniform distribution
-beta_array = Uniform(loc=0, scale=3,).rvs(nsamples=len(bridge_data), random_state=1)
-bridge_data['Beta Value'] = beta_array
+# Add the beta values
+bridge_data['Beta'] = beta_array
 
-# Save the bridge data to a CSV file
-bridge_data.to_csv(f'./assets/{folder}/bridge_data.csv', index=False)
+# # Save the bridge data to a CSV file
+# bridge_data.to_csv(f'./assets/{folder}/bridge_data.csv', index=False)
+
+# Save the bridge data to an Excel file
+with pd.ExcelWriter(f'./assets/{folder}/bridge_data.xlsx') as writer:
+    bridge_data.to_excel(writer, sheet_name='Bridge Data', index=False)
 
 
 # %%
@@ -219,7 +223,7 @@ for n_br in n_brs:
 import networkx as nx
 import matplotlib.pyplot as plt
 
-G = nx.read_graphml('./assets_3/or_hw_comp.graphml')
+G = nx.read_graphml('./assets/or_hw_comp.graphml')
 
 # change graph attributes type
 G_comp = nx.DiGraph()
@@ -234,26 +238,45 @@ for n, data in G.nodes(data=True):
     G_comp.add_node(n, **data)
 mapping = {n: int(n) for n in G_comp.nodes}
 G_comp = nx.relabel_nodes(G_comp, mapping)
-
-pos = nx.kamada_kawai_layout(G_comp, weight='length')
-
+G_clean = G_comp.copy()
+G_clean.remove_edge(38789281, 38789281)
+#pos = nx.kamada_kawai_layout(G_comp, weight='length')
+#%%
 # save pos dictionary to a pickle file
 import pickle
 
-path = './assets/plots/postions.pkl'
-with open(path, 'wb') as f:
-    pickle.dump(pos, f)
+pos = pickle.load(open('./assets/plots/positions.npz', 'rb'))
 
-nx.draw(G, pos, node_size=10, width=0.5, node_color='gray', edge_color='gray', 
-    with_labels=False, arrows=False)
+nx.draw(G_comp, pos, node_size=5, width=0.5, node_color='blue', edge_color='gray', 
+    with_labels=False, arrows=False, alpha=0.5)
 
 # plt.savefig('./assets/plots/computational_graph.png', dpi=600)
 # plt.savefig('./assets/plots/computational_graph.pdf', dpi=600)
 
 # %%
 
-with open('positions.npz', 'wb') as f:
-    pickle.dump(pos, f)
+pos_spectral = nx.spectral_layout(G_comp, weight='length')
+pos_spring = nx.spring_layout(G_comp, weight='length')
+pos_shell = nx.shell_layout(G_comp)
+pos_random = nx.random_layout(G_comp)
 
+
+
+# %%
+fig, ax = plt.subplots(1,1,figsize=(8,6), tight_layout=True)
+nx.draw(G_comp, pos=pos_spectral, node_size=5, width=0.5, node_color='blue', edge_color='gray', 
+    with_labels=False, arrows=False, alpha=0.8,)
+plt.savefig('./assets/plots/comp_graph_spectral.png', dpi=600)
+# %%
+fig, ax = plt.subplots(1,1,figsize=(8,6), tight_layout=True)
+nx.draw(G_comp, pos, node_size=5, width=0.5, node_color='blue', edge_color='gray', 
+    with_labels=False, arrows=False, alpha=0.8,)
+plt.savefig('./assets/plots/comp_graph_kawada.png', dpi=600)
+# %%
+# draw the graph with specific edge drawn in red
+fig, ax = plt.subplots(1,1,figsize=(8,6), tight_layout=True)
+nx.draw(G_clean, pos_spectral, node_size=5, width=0.5, node_color='blue', edge_color='gray', 
+    with_labels=False, arrows=False, alpha=0.5)
+nx.draw_networkx_edges(G_comp, pos_spectral, edgelist=[(38789281, 38789281)], edge_color='red', width=1)
 
 # %%

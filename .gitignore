@@ -401,3 +401,103 @@ assets/~$All_runs_analysis.xlsx
 assets/All_runs_analysis.xlsx
 assets/All_runs.xlsx
 assets/bnd_od.npz
+assets/Bridge_with_Rank.xls
+assets/tmp_2023-11-16_09_15_rand_4/beta_array.pkl
+assets/tmp_2023-11-16_09_15_rand_4/damage_condition.pkl
+assets/tmp_2023-11-16_09_15_rand_4/damage_netdb.pkl
+assets/tmp_2023-11-16_09_15_rand_4/samples.pkl
+assets/tmp_2023-11-16_09_15_rand_4/Screenshot 2023-11-16 125653.png
+assets/tmp_2023-11-16_09_15_rand_4/unique_condition.pkl
+National_Bridge_Inventory/NBI_OR_01.shp.CEEGRAD01.1488.12596.sr.lock
+National_Bridge_Inventory/NBI_OR_01.shp.CEEGRAD01.1488.rd.lock
+National_Bridge_Inventory/NBI_OR_01.shp.CEEGRAD01.9344.12596.sr.lock
+National_Bridge_Inventory/NBI_OR_01.shp.CEEGRAD01.14380.12596.sr.lock
+National_Bridge_Inventory/NBI_OR_01.shp.CEEGRAD01.16348.12596.sr.lock
+assets/plots/30_bridges_5_useful_temp.png
+assets/tmp_2023-11-16_09_15_rand_4/bridge_data.xlsx
+assets/tmp_2023-11-17_00_31_rand_2/beta_array.pkl
+assets/tmp_2023-11-17_00_31_rand_2/bridge_data.xlsx
+assets/tmp_2023-11-17_00_31_rand_2/damage_condition.pkl
+assets/tmp_2023-11-17_00_31_rand_2/damage_netdb.pkl
+assets/tmp_2023-11-17_00_31_rand_2/samples.pkl
+assets/tmp_2023-11-17_00_31_rand_2/Screenshot 2023-11-17 113207.png
+assets/tmp_2023-11-17_00_31_rand_2/unique_condition.pkl
+assets/tmp_2023-11-18_08_50_boom_rand_1/beta_array.pkl
+assets/tmp_2023-11-18_08_50_boom_rand_1/bridge_data.xlsx
+assets/tmp_2023-11-18_08_50_boom_rand_1/damage_condition.pkl
+assets/tmp_2023-11-18_08_50_boom_rand_1/damage_netdb.pkl
+assets/tmp_2023-11-18_08_50_boom_rand_1/samples.pkl
+assets/tmp_2023-11-18_08_50_boom_rand_1/Screenshot 2023-11-18 135432.png
+assets/tmp_2023-11-18_08_50_boom_rand_1/unique_condition.pkl
+assets/tmp_2023-11-19_13_13_boom_rand_2/beta_array.pkl
+assets/tmp_2023-11-19_13_13_boom_rand_2/bridge_data.xlsx
+assets/tmp_2023-11-19_13_13_boom_rand_2/damage_condition.pkl
+assets/tmp_2023-11-19_13_13_boom_rand_2/damage_netdb.pkl
+assets/tmp_2023-11-19_13_13_boom_rand_2/samples.pkl
+assets/tmp_2023-11-19_13_13_boom_rand_2/Screenshot 2023-11-19 145008.png
+assets/tmp_2023-11-19_13_13_boom_rand_2/unique_condition.pkl
+assets/tmp_2023-11-20_09_55_boom_rand_3/beta_array.pkl
+assets/tmp_2023-11-20_09_55_boom_rand_3/bridge_data.xlsx
+assets/tmp_2023-11-20_09_55_boom_rand_3/damage_condition.pkl
+assets/tmp_2023-11-20_09_55_boom_rand_3/damage_netdb.pkl
+assets/tmp_2023-11-20_09_55_boom_rand_3/samples.pkl
+assets/tmp_2023-11-20_09_55_boom_rand_3/Screenshot 2023-11-20 095831.png
+assets/tmp_2023-11-20_09_55_boom_rand_3/unique_condition.pkl
+assets/tmp_2023-11-21_03_17_boom_rand_4/beta_array.pkl
+assets/tmp_2023-11-21_03_17_boom_rand_4/bridge_data.xlsx
+assets/tmp_2023-11-21_03_17_boom_rand_4/damage_condition.pkl
+assets/tmp_2023-11-21_03_17_boom_rand_4/damage_netdb.pkl
+assets/tmp_2023-11-21_03_17_boom_rand_4/samples.pkl
+assets/tmp_2023-11-21_03_17_boom_rand_4/Screenshot 2023-11-21 111941.png
+assets/tmp_2023-11-21_03_17_boom_rand_4/unique_condition.pkl
+assets/tmp_2023-11-22_13_57_boom_rand_42/beta_array.pkl
+assets/tmp_2023-11-22_13_57_boom_rand_42/bridge_data.xlsx
+assets/tmp_2023-11-22_13_57_boom_rand_42/damage_condition.pkl
+assets/tmp_2023-11-22_13_57_boom_rand_42/damage_netdb.pkl
+assets/tmp_2023-11-22_13_57_boom_rand_42/samples.pkl
+assets/tmp_2023-11-22_13_57_boom_rand_42/Screenshot 2023-11-22 142737.png
+assets/tmp_2023-11-22_13_57_boom_rand_42/unique_condition.pkl
+assets/tmp_2023-11-23_13_15_rand_5/beta_array.pkl
+assets/tmp_2023-11-23_13_15_rand_5/bridge_data.xlsx
+assets/tmp_2023-11-23_13_15_rand_5/damage_condition.pkl
+assets/tmp_2023-11-23_13_15_rand_5/damage_netdb.pkl
+assets/tmp_2023-11-23_13_15_rand_5/samples.pkl
+assets/tmp_2023-11-23_13_15_rand_5/Screenshot 2023-11-23 133144.png
+assets/tmp_2023-11-23_13_15_rand_5/unique_condition.pkl
+assets/tmp_2023-11-24_09_39_boom_rand_5/beta_array.pkl
+assets/tmp_2023-11-24_09_39_boom_rand_5/bridge_data.xlsx
+assets/tmp_2023-11-24_09_39_boom_rand_5/damage_condition.pkl
+assets/tmp_2023-11-24_09_39_boom_rand_5/damage_netdb.pkl
+assets/tmp_2023-11-24_09_39_boom_rand_5/samples.pkl
+assets/tmp_2023-11-24_09_39_boom_rand_5/Screenshot 2023-11-24 144429.png
+assets/tmp_2023-11-24_09_39_boom_rand_5/unique_condition.pkl
+*.pkl
+*.png
+*.xlsx
+*.lock
+*.csv
+*.gpkg
+*.graphml
+*.npz
+*.osm
+*.shp
+*.xml
+*.graphml
+*.gsheet
+*.json
+csz_results.py
+result_analysis.py
+numeric_examples_modified_cost.py
+OR_MCS_risk.py
+OR_risk_boom.py
+OR_risk_CSZ.py
+pdx_graph.py
+posteriro_pf2.py
+revised_DY_CSZ.py
+response_jsons_indented.osm
+response_jsons.osm
+spec-file.txt
+temp_30.py
+temp_50.py
+temp_100.py
+test_statistical_properties.py

@@ -10,6 +10,7 @@ import itertools
 from osmnx import utils_graph
 from shapely.ops import linemerge
 from shapely.geometry import MultiLineString
+from UQpy.distributions import Normal, Uniform
 
 _MIN_LANE, _MAX_SPEED = 2, 60.0
 
@@ -83,6 +84,100 @@ def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED,
     if not inplace:
         return H
 
+def _append_compute_attributes_excel(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, 
+                               weight = 'length', inplace=True, excel_file='./assets/Bridge_under_CSZ.xlsx'):
+    """Use excel file to add numertical attributes needed for graph flow computation and further graph simplification
+
+    Args:
+        G (Graph, MultiDiGraph): original graph after preliminary simplification and consolidation
+        min_lane (int, optional): minimum number of lanes for a highway link in one direction. Defaults to 2.
+        max_speed (int, optional): max speed on a highway link. Defaults to 60.
+        inplace (bool, optional): whether to add attributes in place. Defaults to True
+        weight (str, optional): edge weight attribute. Defaults to 'length'.
+        excel_file (str, optional): excel file containing bridge failure probability. Defaults to './assets/Bridge_under_CSZ.xlsx'.
+
+    Returns:
+        H (DiGraph): Graph with added attributes
+    """
+
+    bridge_data = pd.read_excel(excel_file)
+
+    # Retain only required columns 
+    bridge_data = bridge_data[['osmid', 'failure_prob']]
+
+    # Calculate the link beta values (indepedent bridge failure)
+    link_pf = 1 - (1 - bridge_data['failure_prob']).groupby(bridge_data['osmid']).prod()
+    link_data = pd.DataFrame({'osmid': link_pf.index, 'link_pf': link_pf.values})   
+
+    # Change the osmid's to string
+    link_data['osmid'] = link_data['osmid'].astype(str)
+
+    # link_beta is the beta value for the link
+    dist = Normal(loc=0, scale=1)
+    link_data['link_beta'] = -dist.icdf(link_data['link_pf'])
+
+
+    if isinstance(G, (nx.MultiGraph, nx.MultiDiGraph)):
+        H = ox.get_digraph(G, weight=weight)
+        if inplace:
+            inplace = False
+            print("Warning: inplace has been set to False")
+    elif isinstance(G, (nx.Graph, nx.DiGraph)):
+        H = G if inplace else G.copy()
+    else:
+        sys.exit("G must be nx objects")
+
+    bridge_indx = 0
+    for u, v, data in H.edges(data=True):
+
+        osmid = data['osmid']
+        osmid = osmid if isinstance(osmid, str) else str(osmid)
+        if osmid in link_data['osmid'].values:
+            fail = 'yes'
+            beta = link_data.loc[link_data['osmid'] == osmid, 'link_beta'].values[0]
+        else:
+            fail = 'no'
+            beta = np.nan
+
+        if 'lanes' not in data:
+            lane = min_lane
+        elif isinstance(data['lanes'], list):
+            lane = np.min([int(l[0]) for l in data['lanes']])
+        elif isinstance(data['lanes'], str):
+            lane = int(data['lanes'])
+        else:
+            lane = min_lane
+
+        if 'maxspeed' not in data:
+            speed = max_speed
+        elif isinstance(data['maxspeed'], list):
+            speed = np.max([int(l[:2]) for l in data['maxspeed']])
+        elif isinstance(data['maxspeed'], str):
+            speed = int(data['maxspeed'][:2])
+        else:
+            speed = max_speed
+
+        # Use the following assumption: capacity = lane/max_speed*speed
+        capacity = compute_capacity(lane, speed,
+                                    min_lane=min_lane, max_speed=max_speed)
+
+        if fail == 'yes':
+            bridge_indx += 1
+            bridge_id = bridge_indx
+        else:
+            bridge_id = 0
+
+
+    
+        H.edges[u,v].update({'lane': lane,
+                             'speed': speed,
+                             'capacity': capacity,
+                             'bridge_id': bridge_id,
+                             'capacity_param': (min_lane, max_speed),
+                             'beta': beta})
+        
+    if not inplace:
+        return H
 
 def _simplify_graph_d2(G, track_merged=False):
     """Further simplify graph based link properties connecting 2-degree nodes
@@ -243,7 +338,12 @@ def generate_compute_graph(G):
         capacity = data['capacity']
         bridge = data['bridge_id']
         length = data['length']
-        G_comp.add_edge(u, v, lane=lane, speed=speed,
+        if 'beta' in data:
+            beta = data['beta']
+            G_comp.add_edge(u, v, lane=lane, speed=speed,
+                            capacity=capacity, length=length, bridge_id=bridge, beta=beta)
+        else:
+            G_comp.add_edge(u, v, lane=lane, speed=speed,
                         capacity=capacity, length=length, bridge_id=bridge)
     
     return G_comp

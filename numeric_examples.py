@@ -37,7 +37,7 @@ def compare_methods(n_br,useful_br, random_state, cost_type='add'):
     risk0 = precise_risk(pf_array, cost_array, cost_type=cost_type, cost_base=cost_base)
 
     # TMCMC
-    n_chains, resample_pct, n_smp = 100, 10, 5000
+    n_chains, resample_pct, n_smp = 100, 10, 5000 #n_smp 5k or 10k
     n_burn, n_jump = 1000, 10
     covar = 0.5**2
 
@@ -195,7 +195,7 @@ def compare_methods(n_br,useful_br, random_state, cost_type='add'):
 cost_type = 'swan'
 
 if cost_type == 'add':
-    n_brs = [5, 10, 30, 50, 100]
+    n_brs = [5, 10, 30, 50]
     random_states = [1, 2, 3, 4, 5]
     useful_brs = [1] # doesn't matter for add cost
 
@@ -211,20 +211,20 @@ if cost_type == 'add':
                 print('n_br = {}, random_state = {}, n_useful = {}'.format(n_br, random_state, useful_br))
 
 elif cost_type == 'swan':
-    n_brs = [30, 50, 100]
-    random_states = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    useful_brs = [3, 5, 10]
+    n_brs = [30, 30, 50]
+    random_states = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] # 11 to 101 used in the report
+    useful_brs = [3, 5, 5]
 
     TM_vs_MC = dict()
     run = 1
-    for n_br in n_brs:
+    for i, n_br in enumerate(n_brs):
         for random_state in random_states:
-            for useful_br in useful_brs:
-                results = compare_methods(n_br,useful_br, random_state, cost_type=cost_type)
-                TM_vs_MC[run] = results
-                TM_vs_MC[run]['input'] = [n_br, random_state, useful_br]
-                run += 1
-                print('n_br = {}, random_state = {}, n_useful = {}'.format(n_br, random_state, useful_br))
+            useful_br = useful_brs[i]
+            results = compare_methods(n_br,useful_br, random_state, cost_type=cost_type)
+            TM_vs_MC[run] = results
+            TM_vs_MC[run]['input'] = [n_br, random_state, useful_br]
+            run += 1
+            print('n_br = {}, random_state = {}, n_useful = {}'.format(n_br, random_state, useful_br))
 
 #%%
 # Will write results to a csv file

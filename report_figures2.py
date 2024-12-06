@@ -36,20 +36,21 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-for dim in [30, 50, 100]:
-    for useful in [3, 5, 10]:
+filename = './assets/TM_vs_MC.xlsx'
+for dim in [30, 30, 50]:
+    for useful in [3, 5, 5]:
         temp_vs_mc = pd.read_excel(
-            './assets/numerical_comparison_AZ.xlsx', sheet_name='TMCMC_vs_MC',
+            filename, sheet_name='TM_vs_MC',
             header=0 )
-        index_names = temp_vs_mc[temp_vs_mc['Method']=='Bound'].index
+        index_names = temp_vs_mc[temp_vs_mc[' Method']=='Bound'].index
         temp_vs_mc.drop(index_names, inplace=True)
-        temp_vs_mc = temp_vs_mc[(temp_vs_mc['Dimension']==dim) & (temp_vs_mc['Useful dim.']==useful)]
+        temp_vs_mc = temp_vs_mc[(temp_vs_mc[' Dimension']==dim) & (temp_vs_mc[' Useful dim.']==useful)]
         fig, ax = plt.subplots(1,1, figsize=(4,3), tight_layout=True)
-        g1 = sns.boxplot(data=temp_vs_mc, x='Method', y='Result', width=0.4, ax=ax,
+        g1 = sns.boxplot(data=temp_vs_mc, x=' Method', y=' Result', width=0.4, ax=ax,
                         meanline=True, showmeans=True, whis=(0,100))
-        g2 = sns.swarmplot(data=temp_vs_mc, x='Method', y='Result', color='gray', 
+        g2 = sns.swarmplot(data=temp_vs_mc, x=' Method', y=' Result', color='gray', 
                         ax=ax, **dict(marker='o'))
-        ax.axhline(temp_vs_mc['Benchmark'].iloc[0], linestyle='-.', color='tab:red')
+        ax.axhline(temp_vs_mc[' Benchmark'].iloc[0], linestyle='-.', color='tab:red')
         ax.set_ylabel('Risk', fontsize=9)
         ax.set_xlabel('Method', fontsize=9)
         ax.tick_params(axis='both', labelsize=9)
@@ -92,10 +93,9 @@ bridge_df.to_csv(f'./assets/{folder}/top{top}_bridgesv2.csv')
 #%%
 import numpy as np
 import pandas as pd
-from UQpy.distributions import Uniform
 
 # Set the folder name
-folder = 'tmp_2023-11-15_10_16_rand_3'
+folder = 'tmp_2023-11-24_09_39_boom_rand_5'
 
 # Load the damage condition data
 damage_condition = np.load(f'./assets/{folder}/damage_condition.pkl', allow_pickle=True)
@@ -199,8 +199,8 @@ file = './assets/Case_II_results.pickle'
 with open(file, 'rb') as f:
     TM_vs_MC = pickle.load(f)
 
-n_brs = [30, 50, 100]
-useful_brs = [3, 5, 10]
+n_brs = [30, 30, 50]
+useful_brs = [3, 5, 5]
 for n_br in n_brs:
     for n_use in useful_brs:
         boxplots(TM_vs_MC, n_br, n_use)
@@ -239,7 +239,7 @@ for n, data in G.nodes(data=True):
 mapping = {n: int(n) for n in G_comp.nodes}
 G_comp = nx.relabel_nodes(G_comp, mapping)
 G_clean = G_comp.copy()
-G_clean.remove_edge(38789281, 38789281)
+G_clean.remove_edge(38789281, 38789281) # remove self loop
 #pos = nx.kamada_kawai_layout(G_comp, weight='length')
 #%%
 # save pos dictionary to a pickle file

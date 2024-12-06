@@ -92,10 +92,16 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
         # Initialize attributes
         self.tempering_parameters = None
         self.evidence = None
-        self.evidence_CoV = None
         self.raw_random_state = random_state if isinstance(random_state, int) else None
         self.cov_scale = cov_scale
         self.weight_cov_threshold = weight_cov_threshold
+        self.r_0_j = None
+        self.lambda_j = None
+        self.N_j = None
+        self.S_j = None
+        self.COV_evidence = None 
+                  
+
 
     @beartype
     def run(self, nsamples: PositiveInteger = None):
@@ -129,6 +135,13 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
             for i in range(nsamples)) / nsamples
 
         evidence_estimator = expected_q0
+
+        # Initialize 
+        self.r_0_j = []
+        self.lambda_j = []
+        self.N_j = []
+        self.S_j = []
+        self.term1 = [] 
 
         if self.save_intermediate_samples is True:
             self.intermediate_samples = []
@@ -186,7 +199,7 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
 
             self.logger.info('Begin Resampling')
             # Resampling and MH-MCMC step
-            for i in range(self.n_resamples):
+            for i in range(self.n_resamples): # current setting is 100% resampling so each sample is resampled
 
                 # Resampling from previous tempering level
                 lead_index = int(self.random_state.choice(pts_index, p=weight_probabilities))
@@ -214,7 +227,7 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
                     for j in range(nsamples):
                         weight_probabilities[j] = weights[j] / w_sum
 
-            self.logger.info('Begin MCMC')
+            self.logger.info('Begin MCMC') # resampled points are used as seed for the MCMC step
             mcmc_seed = self._mcmc_seed_generator(resampled_pts=points[0:self.n_resamples, :],
                                                   arr_length=self.n_resamples,
                                                   seed_length=self.__n_chains,
@@ -232,9 +245,22 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
 
             self.logger.info('Tempering level ended')
 
+            # Calculate values for the evidence estimator
+            sj = w_sum / nsamples
+            delta = weights - sj
+            current_r = [(1/(nsamples-q))*np.dot(delta[:nsamples-q], delta[q:]) for q in range(nsamples)] # vector
+            self.r_0_j = np.append(self.r_0_j, current_r[0])
+            lambda_j = 2*np.sum([(1-q/nsamples)*current_r[q]/current_r[0] for q in range(nsamples)])
+            self.lambda_j = np.append(self.lambda_j, lambda_j)
+            self.S_j = np.append(self.S_j, sj)
+
         # Setting the calculated values to the attributes
         self.samples = points
         self.evidence = evidence_estimator
+
+        # Calculate the evidence CoV
+        self.term1 = [1+ (1+self.lambda_j[j])*(self.r_0_j[j]/(nsamples*self.S_j[j]**2)) for j in range(len(self.lambda_j))]
+        self.COV_evidence = np.sqrt(np.prod(self.term1)-1) #len(self.evidence_values))
 
     def update_target_and_seed(self, mcmc_class, mcmc_seed, mcmc_log_pdf_target):
         mcmc_class.seed = mcmc_seed
@@ -403,6 +429,13 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
 
         evidence_estimator = expected_q0
 
+        # Initialize 
+        self.r_0_j = []
+        self.lambda_j = []
+        self.N_j = []
+        self.S_j = []
+        self.term1 = [] 
+
         if self.save_intermediate_samples is True:
             self.intermediate_samples = []
             self.intermediate_samples += [points.copy()]
@@ -535,7 +568,21 @@ class SequentialTemperingMCMCpar(TemperingMCMC):
 
             self.logger.info('Tempering level ended')
 
+            # Calculate values for the evidence estimator
+            sj = w_sum / nsamples
+            delta = weights - sj
+            current_r = [(1/(nsamples-q))*np.dot(delta[:nsamples-q], delta[q:]) for q in range(nsamples)]
+            self.r_0_j = np.append(self.r_0_j, current_r[0])
+            lambda_j = 2*np.sum([(1-q/nsamples)*current_r[q]/current_r[0] for q in range(nsamples)])
+            self.lambda_j = np.append(self.lambda_j, lambda_j)
+            self.S_j = np.append(self.S_j, sj)
+
         # Setting the calculated values to the attributes
         self.samples = points
         self.evidence = evidence_estimator
         self.sigma_matrix = sigma_matrix
+
+        # Calculate the evidence CoV
+        self.term1 = [1+ (1+self.lambda_j[j])*(self.r_0_j[j]/(nsamples*self.S_j[j]**2)) for j in range(len(self.lambda_j))]
+        self.COV_evidence = np.sqrt(np.prod(self.term1)-1)
+        

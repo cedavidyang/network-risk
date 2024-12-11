@@ -1,11 +1,13 @@
 # %%
 import sys
+import itertools
+import warnings
 import networkx as nx
 import osmnx as ox
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import itertools
+import scipy.stats as stats
 
 from osmnx import utils_graph
 from shapely.ops import linemerge
@@ -13,28 +15,35 @@ from shapely.geometry import MultiLineString
 
 _MIN_LANE, _MAX_SPEED = 2, 60.0
 
-
-def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, inplace=True):
+def _append_compute_attributes(
+    G, weight='length',
+    min_lane=_MIN_LANE, max_speed=_MAX_SPEED,
+    inplace=True,
+):
     """Add numertical attributes needed for graph flow computation and further graph simplification
 
     Args:
-        G (Graph): original graph after preliminary simplification and consolidation
+        G (Graph, MultiDiGraph): original graph after preliminary simplification and consolidation
         min_lane (int, optional): minimum number of lanes for a highway link in one direction. Defaults to 2.
         max_speed (int, optional): max speed on a highway link. Defaults to 60.
         inplace (bool, optional): whether to add attributes in place. Defaults to True
 
     Returns:
-        H (MultiDiGraph): Graph with added attributes
+        H (DiGraph): Graph with added attributes
     """
     
-    if isinstance(G, (nx.Graph, nx.DiGraph)):
+    if isinstance(G, (nx.MultiGraph, nx.MultiDiGraph)):
+        H = ox.get_digraph(G, weight=weight)
+        if inplace:
+            inplace = False
+            warnings.warn(
+                "Warning: inplace has been set to False due to converting from multigraph to simple graph",
+                RuntimeWarning
+            )
+    elif isinstance(G, (nx.Graph, nx.DiGraph)):
         H = G if inplace else G.copy()
-    elif G.graph['no_parallel']:
-        H = ox.get_undirected(G)
-        inplace = False
-        print("Warning: inplace has been set to False")
     else:
-        sys.exit("G must be Graph or DiGraph or can be converted to such")
+        sys.exit("G must be nx objects")
 
     bridge_indx = 0
     for u, v, data in H.edges(data=True):
@@ -57,7 +66,7 @@ def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, inpl
         else:
             speed = max_speed
 
-        # capacity = lane/max_speed*speed
+        # Use the following assumption: capacity = lane/max_speed*speed
         capacity = compute_capacity(lane, speed,
                                     min_lane=min_lane, max_speed=max_speed)
 
@@ -78,8 +87,83 @@ def _append_compute_attributes(G, min_lane=_MIN_LANE, max_speed=_MAX_SPEED, inpl
                              'bridge_id': bridge_id,
                              'capacity_param': (min_lane, max_speed)})
         
-    if not inplace:
-        return H
+    return H
+
+
+def _append_compute_attributes_excel(
+    G, weight='length', beta_threshold=10,
+    min_lane=_MIN_LANE, max_speed=_MAX_SPEED, 
+    inplace=True,
+    excel_file=None,
+):
+    """Use excel file to add numertical attributes needed for graph flow computation and further graph simplification
+
+    Args:
+        G (Graph, MultiDiGraph): original graph after preliminary simplification and consolidation
+        min_lane (int, optional): minimum number of lanes for a highway link in one direction. Defaults to 2.
+        max_speed (int, optional): max speed on a highway link. Defaults to 60.
+        inplace (bool, optional): whether to add attributes in place. Defaults to True
+        weight (str, optional): edge weight attribute. Defaults to 'length'.
+        excel_file (str, optional): excel file containing bridge failure probability (must have columns 'osmid' and 'failure_prob').
+
+    Returns:
+        H (DiGraph): Graph with added attributes
+    """
+
+    assert excel_file is not None, \
+        "Must path to an excel file with 'osmid' and 'failure_prob' columns"
+
+
+    # Retain only required columns 
+    bridge_data = pd.read_excel(excel_file, usecols=['osmid', 'failure_prob'])
+
+    # Calculate the link beta values (indepedent bridge failure)
+    link_pf = 1 - (1 - bridge_data['failure_prob']).groupby(bridge_data['osmid']).prod()
+    link_data = pd.DataFrame({'osmid': link_pf.index, 'link_pf': link_pf.values})   
+
+    # Change the osmid's to string array
+    link_data['osmid'] = link_data['osmid'].astype(str)
+
+    # link_beta is the beta value for the link
+    link_data['link_beta'] = -stats.norm.ppf(link_data['link_pf'])
+
+    H = _append_compute_attributes(
+        G, weight=weight,
+        min_lane=min_lane, max_speed=max_speed,
+        inplace=inplace
+    )
+
+    bridge_indx = 0
+    for u, v, data in H.edges(data=True):
+
+        osmid = data['osmid']
+        osmid = osmid if isinstance(osmid, str) else str(osmid)
+        if osmid in link_data['osmid'].values:
+            beta = link_data.loc[link_data['osmid'] == osmid, 'link_beta'].values[0]
+
+            # only include bridge links with small beta values
+            if beta <= beta_threshold:
+                fail = True
+            else:
+                fail = False
+                beta = None
+
+        else:
+            fail = False
+            beta = None
+
+        if fail and data['birdge_id'] != 0:
+            bridge_indx += 1
+            bridge_id = bridge_indx
+        else:
+            bridge_id = 0
+        
+        H.edges[u,v].update({
+            'bridge_id': bridge_id,
+            'beta': beta
+        })
+        
+    return H
 
 
 def _simplify_graph_d2(G, track_merged=False):
@@ -227,8 +311,11 @@ def generate_compute_graph(G):
     Returns:
         G_comp (Graph): Graph with added attributes
     """
-    
-    G_comp = nx.Graph()
+
+    if G.is_directed():
+        G_comp = nx.DiGraph()
+    else:
+        G_comp = nx.Graph()
     
     G_comp.add_nodes_from(G.nodes)
 
@@ -238,8 +325,12 @@ def generate_compute_graph(G):
         capacity = data['capacity']
         bridge = data['bridge_id']
         length = data['length']
-        G_comp.add_edge(u, v, lane=lane, speed=speed,
-                        capacity=capacity, length=length, bridge_id=bridge)
+        beta = data['beta'] if 'beta' in data else None
+        G_comp.add_edge(
+            u, v, lane=lane, speed=speed,
+            capacity=capacity, length=length,
+            bridge_id=bridge, beta=beta
+        )
     
     return G_comp
 
@@ -362,8 +453,11 @@ def generate_highway_graph(
     return Gc_comp, Gc_gis
 
 
-def generate_od_pairs(G, end_nodes=None, length='length',
-                      min_distance=0., max_distance=1e12):
+def generate_od_pairs(
+    G, end_nodes=None, length='length',
+    min_distance=0., max_distance=1e12,
+    save_to=None,
+):
     """generate od pairs based on end nodes. They are generated based on:
     * each bridge has at least one OD
     * for one bridge, the OD is selected from all end-node pairs whose 
@@ -381,6 +475,8 @@ def generate_od_pairs(G, end_nodes=None, length='length',
         Defaults to 0.
         max_distance (float, optional): maximum distance for initializeing 
         OD distance associated with each bridge. Defaults to 1e12.
+        save_to (str, optional): path to save the OD pairs. Defaults to
+        None (no saving).
 
     Returns:
         unique_pairs (list): list of od pairs
@@ -399,6 +495,10 @@ def generate_od_pairs(G, end_nodes=None, length='length',
     shortest_path_log['od'] = [(0,0)]*len(bridge_edges)
 
     for o,d in all_od_pairs:
+        # check if d is reachable from o
+        if not nx.has_path(G, o, d):
+            continue
+
         paths = nx.all_shortest_paths(G, o, d, weight=length)
         for path in paths:
             path_graph = nx.path_graph(path)
@@ -418,6 +518,13 @@ def generate_od_pairs(G, end_nodes=None, length='length',
 
     unique_pairs = np.unique(all_pairs, axis=0)
     unique_pairs = unique_pairs[np.all(unique_pairs, axis=1)]
+
+    if save_to is not None:
+        # save the OD pairs to assets
+        list_unique_nodes = np.unique(unique_pairs)
+        subgraph = G.subgraph(list_unique_nodes)
+        unique_nodes_gdf = utils_graph.graph_to_gdfs(subgraph, nodes=True, edges=False)
+        unique_nodes_gdf.to_file(save_to, driver='GPKG')
 
     return unique_pairs, shortest_path_log
 

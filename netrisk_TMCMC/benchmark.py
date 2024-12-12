@@ -2,7 +2,7 @@
 import numpy as np
 import itertools
 
-from highway_risk_temper import get_damage_state, scenario_logp
+from .net_util import get_damage_state, scenario_logp
 
 
 def scenario_cost(damage_condition, cost_array,

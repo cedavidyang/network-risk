@@ -4,7 +4,7 @@ import networkx as nx
 from typing import Optional
 
 from UQpy.distributions import Normal
-from type_verifier import Numpy2DBooleanArray, Numpy2DFloatArray, NumpyFloatArray, Numpy2DIntArray
+from .type_verifier import Numpy2DBooleanArray, Numpy2DFloatArray, NumpyFloatArray, Numpy2DIntArray
 
 
 def net_capacity(G, od_pairs, capacity='capacity'):

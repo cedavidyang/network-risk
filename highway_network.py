@@ -15,7 +15,7 @@ from shapely.geometry import MultiLineString
 
 _MIN_LANE, _MAX_SPEED = 2, 60.0
 
-def _append_compute_attributes(
+def append_compute_attributes(
     G, weight='length',
     min_lane=_MIN_LANE, max_speed=_MAX_SPEED,
     inplace=True,
@@ -90,7 +90,7 @@ def _append_compute_attributes(
     return H
 
 
-def _append_compute_attributes_excel(
+def append_compute_attributes_excel(
     G, weight='length', beta_threshold=10,
     min_lane=_MIN_LANE, max_speed=_MAX_SPEED, 
     inplace=True,
@@ -166,7 +166,7 @@ def _append_compute_attributes_excel(
     return H
 
 
-def _simplify_graph_d2(G, track_merged=False):
+def simplify_graph_d2(G, track_merged=False):
     """Further simplify graph based link properties connecting 2-degree nodes
 
     Args:

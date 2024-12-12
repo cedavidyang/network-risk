@@ -13,10 +13,10 @@ from type_verifier import Numpy2DBooleanArray, Numpy2DFloatArray, NumpyFloatArra
 from UQpy.sampling import MetropolisHastings
 from UQpy.distributions import Normal, Uniform, MultivariateNormal
 
-from parallel_tempMCMC import SequentialTemperingMCMCpar
-from highway_risk_temper import net_capacity
-from highway_risk_temper import scenario_logC
-from highway_risk_temper import get_damage_state
+from parallel_TMCMC import SequentialTemperingMCMCpar
+from highway_risk_util import net_capacity
+from highway_risk_util import scenario_logC
+from highway_risk_util import get_damage_state
 
 
 if __name__ == '__main__':

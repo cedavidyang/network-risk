@@ -59,8 +59,10 @@ def _append_compute_attributes(
             speed = max_speed
 
         # Use the following assumption: capacity = lane/max_speed*speed
-        capacity = compute_capacity(lane, speed,
-                                    min_lane=min_lane, max_speed=max_speed)
+        capacity = compute_capacity(
+            lane, speed,
+            min_lane=min_lane, max_speed=max_speed
+        )
 
         if 'bridge' not in data:
             bridge_id = 0
@@ -262,7 +264,7 @@ def _simplify_graph_d2(G, track_merged=False):
     G.remove_nodes_from(set(all_nodes_to_remove))
 
     # mark graph as having been simplified
-    G.graph["simplified2"] = True
+    G.graph["simplified"] = True
 
     return G
 
@@ -335,8 +337,8 @@ def generate_highway_graph(
     # by leaving only the shortest edge (this convert Graph back to DiGraph)
     Gc_nopar = ox.get_digraph(Gc_raw, weight=multi_weight)
     if save_tmp_graph:
-        nx.write_graphml(Gc_nopar, "./tmp/Gc_nopar.graphml")
         G_plot = nx.MultiDiGraph(Gc_nopar)
+        ox.save_graphml(G_plot, "./tmp/Gc_nopar.graphml")
         ox.save_graph_geopackage(G_plot, filepath="./tmp/Gc_nopar.gpkg")
 
     # STEP 3: append computational attributes to links in preparation for
@@ -353,20 +355,25 @@ def generate_highway_graph(
             csv_file=from_pf_file,
         )
 
-    # STEP 4: further simplify graph by removing 2-degree nodes that do no
-    # connect to a bridge link
-    Gc_gis = _simplify_graph_d2(Gc_nopar, track_merged=track_merged)
-    if save_tmp_graph:
-        nx.write_graphml(Gc_gis, "./tmp/Gc_gis.graphml")
-        G_plot = nx.MultiDiGraph(Gc_gis)
-        ox.save_graph_geopackage(G_plot, filepath="./tmp/Gc_gis.gpkg")
+    # Step 4 is no longer needed since imported graph from osmnx already did this
+    # Also, there are links without "geometry" attribute, resulting in
+    # KeyError when using _simplify_graph_d2.
+    # # STEP 4: further simplify graph by removing 2-degree nodes that
+    # # do not connect to a bridge link
+    # Gc_gis = _simplify_graph_d2(Gc_nopar, track_merged=track_merged)
+    # if save_tmp_graph:
+    #     nx.write_graphml(Gc_gis, "./tmp/Gc_gis.graphml")
+    #     G_plot = nx.MultiDiGraph(Gc_gis)
+    #     ox.save_graph_geopackage(G_plot, filepath="./tmp/Gc_gis.gpkg")
 
     if save_to is not None:
-        nx.write_graphml(Gc_gis, save_to+".graphml")
-        G_plot = nx.MultiDiGraph(Gc_gis)
-        ox.save_graph_geopackage(G_plot, filepath=save_to+".gpkg")
+        # nx version does work since edge attribute has special types.
+        # nx.write_graphml(Gc_nopar, save_to+".graphml")
+        G_save = nx.MultiDiGraph(Gc_nopar)
+        ox.save_graphml(G_save, filepath=save_to+".graphml")
+        ox.save_graph_geopackage(G_save, filepath=save_to+".gpkg")
 
-    return Gc_gis
+    return Gc_nopar
 
 
 def generate_compute_graph(G, save_to=None):
@@ -399,7 +406,8 @@ def generate_compute_graph(G, save_to=None):
         )
 
     if save_to is not None:
-        nx.write_graphml(G_comp, save_to+".graphml")
+        G_save = nx.MultiDiGraph(G_comp)
+        ox.save_graphml(G_save, save_to+".graphml")
     
     return G_comp
 
@@ -516,7 +524,7 @@ def generate_od_pairs(
         list_unique_nodes = np.unique(unique_pairs)
         subgraph = G.subgraph(list_unique_nodes)
         unique_nodes_gdf = utils_graph.graph_to_gdfs(subgraph, nodes=True, edges=False)
-        unique_nodes_gdf.to_file(save_to, driver='GPKG')
+        unique_nodes_gdf.to_file(save_to+'.gpkg', driver='GPKG')
 
     return unique_pairs, shortest_path_log
 

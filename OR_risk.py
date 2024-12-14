@@ -33,7 +33,7 @@ if __name__ == '__main__':
     warm_start = False
     damage_dict_path = os.path.join(data_dir, 'damage_netdb.pkl')
 
-    random_state = 1
+    seed_TMCMC = 1
     seed_beta = 1
     
     mode = 'run'   # 'test' to consider only 5 bridges
@@ -149,7 +149,7 @@ if __name__ == '__main__':
             percentage_resampling=resample_pct,
             sampler=mcmc_sampler,
             weight_cov_threshold=cov_threshold,
-            random_state=random_state,
+            random_state=seed_TMCMC,
             nsamples=n_smp, n_jobs=1,
         )
         time0 = time.time()
@@ -168,7 +168,7 @@ if __name__ == '__main__':
                     percentage_resampling=resample_pct,
                     sampler=mcmc_sampler,
                     weight_cov_threshold=cov_threshold,
-                    random_state=random_state,
+                    random_state=seed_TMCMC,
                     nsamples=n_smp, n_jobs=n_jobs,
                 )
                 time0 = time.time()

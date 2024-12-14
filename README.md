@@ -11,6 +11,10 @@ This repo provides data and scripts to reproduce ressults in the following paper
 
 It also serves as an example and tutorial of using TMCMC for network risk assessment.
 
+## Network generation
+
+Run `prepare_OR_network.py` to generate graphs.
+
 ## Case I examples
 
 For Case I examples, run `case_I.py` with different random seeds and asset numbers.

@@ -33,7 +33,7 @@ if __name__ == '__main__':
     warm_start = False
     damage_dict_path = os.path.join(data_dir, 'damage_netdb.pkl')
 
-    seed_TMCMC = 1
+    seed_TMCMC = 42
     seed_beta = 1
     
     mode = 'run'   # 'test' to consider only 5 bridges

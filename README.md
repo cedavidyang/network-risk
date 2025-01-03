@@ -25,4 +25,5 @@ For Case II examples, run `case_II.py` with different random seeds, asset number
 
 ## OR network risk
 
-The script `OR_risk.py` reproduces network risk of Oregon highway bridges.
+The script `OR_risk.py` reproduces network risk of Oregon highway links using method proposed in the paper.
+The script `OR_MCS_risk.py` reproduces network risk of Oregon highway links using crude MCS. 

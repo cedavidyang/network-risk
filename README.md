@@ -1,4 +1,4 @@
-# Instructions
+# TMCMC for Network Risk Assessment
 
 This repo provides data and scripts to reproduce ressults in the following paper:
 
@@ -27,3 +27,14 @@ For Case II examples, run `case_II.py` with different random seeds, asset number
 
 The script `OR_risk.py` reproduces network risk of Oregon highway links using method proposed in the paper.
 The script `OR_MCS_risk.py` reproduces network risk of Oregon highway links using crude MCS. 
+
+
+## License
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)**.
+
+You are free to use, modify, and distribute this software, but if you do, **you must open-source your entire project** under the same license. This requirement applies even if you run the software over a network (e.g., as a web service) without distributing the executable.
+
+See the [LICENSE](LICENSE) file for details.
